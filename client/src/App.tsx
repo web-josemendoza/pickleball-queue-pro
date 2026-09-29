@@ -1,5 +1,5 @@
 import PlayerAuth from "./components/PlayerAuth";
-import FixedPairsEditor from "./components/FixedPairsEditor";
+import PairRulesEditor from "./components/PairRulesEditor";
 import { usePlayerAlerts } from "./hooks/usePlayerAlerts";
 
 import { subscribeToAuth } from "./lib/auth";
@@ -35,7 +35,8 @@ import {
 } from "./lib/fourOnFour";
 
 import {
-  addFixedPair,
+  addPendingPair,
+  addSessionPair,
   addGuestPlayerToSession,
   archiveOpenPlaySession,
   clearOpenPlay,
@@ -43,10 +44,9 @@ import {
   finishCourtGame,
   finishOpenPlay,
   getRankedPlayers,
-  addPendingFixedPair,
   linkGuestPlayerToAccount,
-  removeFixedPair,
-  removePendingFixedPair,
+  removePendingPair,
+  removeSessionPair,
   removePlayerFromSession,
   saveCourtDraftScore,
   setPlayerBreak,
@@ -54,12 +54,12 @@ import {
   startNextCycle,
   startOpenPlay,
   subscribeToOpenPlay,
-  subscribeToPendingFixedPairs,
+  subscribeToPendingPairRules,
   subscribeToSessionHistory,
   updateCourtLineup,
   type ArchivedOpenPlaySession,
   type CourtState,
-  type FixedPair,
+  type PairRules,
   type OpenPlayState,
   type PlayerStats,
 } from "./lib/game";
@@ -355,9 +355,12 @@ const [
 ] = useState(false);
 
 const [
-  pendingFixedPairs,
-  setPendingFixedPairs,
-] = useState<FixedPair[]>([]);
+  pendingPairRules,
+  setPendingPairRules,
+] = useState<PairRules>({
+  fixedPairs: [],
+  keepApartPairs: [],
+});
 
 const [
   setupSkillBalance,
@@ -493,8 +496,8 @@ useEffect(() => {
   }, []);
 
   useEffect(() => {
-    return subscribeToPendingFixedPairs(
-      setPendingFixedPairs
+    return subscribeToPendingPairRules(
+      setPendingPairRules
     );
   }, []);
 
@@ -1077,8 +1080,10 @@ const sessionStats = useMemo(() => {
   courtCount,
   durationHours,
   players,
-  pendingFixedPairs,
-  setupSkillBalance
+  {
+    ...pendingPairRules,
+    skillBalance: setupSkillBalance,
+  }
 );
     } catch (error) {
       console.error("Unable to start open play:", error);
@@ -2557,13 +2562,23 @@ const handleAddGuestPlayer =
                   </span>
                 </label>
 
-                <div className="mt-5">
-                  <FixedPairsEditor
+                <div className="mt-5 space-y-4">
+                  <PairRulesEditor
+                    kind="fixed"
                     players={players}
-                    pairs={pendingFixedPairs}
+                    pairs={pendingPairRules.fixedPairs}
                     description="Pair players from the queue before starting. They will play together as teammates all session, including the first round."
-                    onAdd={addPendingFixedPair}
-                    onRemove={removePendingFixedPair}
+                    onAdd={(a, b) => addPendingPair("fixed", a, b)}
+                    onRemove={(pair) => removePendingPair("fixed", pair)}
+                  />
+
+                  <PairRulesEditor
+                    kind="keepApart"
+                    players={players}
+                    pairs={pendingPairRules.keepApartPairs}
+                    description="These players will never be put on the same team. They can still play against each other."
+                    onAdd={(a, b) => addPendingPair("keepApart", a, b)}
+                    onRemove={(pair) => removePendingPair("keepApart", pair)}
                   />
                 </div>
 
@@ -3792,13 +3807,23 @@ const handleAddGuestPlayer =
         </label>
 
         {/* FIXED PAIRS */}
-        <div className="mt-6">
-          <FixedPairsEditor
+        <div className="mt-6 space-y-4">
+          <PairRulesEditor
+            kind="fixed"
             players={game.players}
             pairs={game.fixedPairs ?? []}
             description="Paired players always go on court together as teammates, starting with the next rotation."
-            onAdd={addFixedPair}
-            onRemove={removeFixedPair}
+            onAdd={(a, b) => addSessionPair("fixed", a, b)}
+            onRemove={(pair) => removeSessionPair("fixed", pair)}
+          />
+
+          <PairRulesEditor
+            kind="keepApart"
+            players={game.players}
+            pairs={game.keepApartPairs ?? []}
+            description="These players will never be put on the same team, starting with the next rotation. They can still play against each other."
+            onAdd={(a, b) => addSessionPair("keepApart", a, b)}
+            onRemove={(pair) => removeSessionPair("keepApart", pair)}
           />
         </div>
 

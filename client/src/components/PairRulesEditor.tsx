@@ -1,9 +1,13 @@
 import { useState } from "react";
 
-import type { FixedPair } from "../lib/game";
+import type {
+  FixedPair,
+  PairKind,
+} from "../lib/game";
 import type { QueuePlayer } from "../lib/queue";
 
-type FixedPairsEditorProps = {
+type PairRulesEditorProps = {
+  kind: PairKind;
   players: QueuePlayer[];
   pairs: FixedPair[];
   description: string;
@@ -12,17 +16,77 @@ type FixedPairsEditorProps = {
     playerBId: string
   ) => Promise<void>;
   onRemove: (
-    playerId: string
+    pair: FixedPair
   ) => Promise<void>;
 };
 
-export default function FixedPairsEditor({
+const COPY: Record<
+  PairKind,
+  {
+    title: string;
+    joiner: string;
+    addLabel: string;
+    removeLabel: string;
+  }
+> = {
+  fixed: {
+    title: "Fixed Pairs",
+    joiner: "&",
+    addLabel: "PAIR",
+    removeLabel: "UNPAIR",
+  },
+  keepApart: {
+    title: "Keep Apart",
+    joiner: "≠",
+    addLabel: "KEEP APART",
+    removeLabel: "REMOVE",
+  },
+};
+
+// Full class names so Tailwind can see them.
+const TONE: Record<
+  PairKind,
+  {
+    box: string;
+    heading: string;
+    text: string;
+    input: string;
+    button: string;
+    row: string;
+    joiner: string;
+    remove: string;
+  }
+> = {
+  fixed: {
+    box: "border-violet-200 bg-violet-50",
+    heading: "text-violet-700",
+    text: "text-violet-900/70",
+    input: "border-violet-200 focus:border-violet-500",
+    button: "bg-violet-600 hover:bg-violet-500",
+    row: "ring-violet-200",
+    joiner: "text-violet-500",
+    remove: "border-violet-200 text-violet-600 hover:bg-violet-100",
+  },
+  keepApart: {
+    box: "border-rose-200 bg-rose-50",
+    heading: "text-rose-700",
+    text: "text-rose-900/70",
+    input: "border-rose-200 focus:border-rose-500",
+    button: "bg-rose-600 hover:bg-rose-500",
+    row: "ring-rose-200",
+    joiner: "text-rose-500",
+    remove: "border-rose-200 text-rose-600 hover:bg-rose-100",
+  },
+};
+
+export default function PairRulesEditor({
+  kind,
   players,
   pairs,
   description,
   onAdd,
   onRemove,
-}: FixedPairsEditorProps) {
+}: PairRulesEditorProps) {
   const [playerAId, setPlayerAId] =
     useState("");
 
@@ -32,14 +96,21 @@ export default function FixedPairsEditor({
   const [saving, setSaving] =
     useState(false);
 
+  const copy = COPY[kind];
+  const tone = TONE[kind];
+
+  // A player can be in only one fixed pair, but
+  // can be kept apart from several people.
   const pairedIds = new Set(
-    pairs.flatMap((pair) => [
-      pair.playerA,
-      pair.playerB,
-    ])
+    kind === "fixed"
+      ? pairs.flatMap((pair) => [
+          pair.playerA,
+          pair.playerB,
+        ])
+      : []
   );
 
-  const unpairedPlayers =
+  const selectablePlayers =
     players.filter(
       (player) =>
         !pairedIds.has(player.id)
@@ -59,14 +130,14 @@ export default function FixedPairsEditor({
       await action();
     } catch (error) {
       console.error(
-        "Fixed pair update failed:",
+        `${copy.title} update failed:`,
         error
       );
 
       alert(
         error instanceof Error
           ? error.message
-          : "Unable to update fixed pairs."
+          : `Unable to update ${copy.title.toLowerCase()}.`
       );
     } finally {
       setSaving(false);
@@ -92,13 +163,13 @@ export default function FixedPairsEditor({
         onChange(event.target.value)
       }
       disabled={saving}
-      className="rounded-xl border border-violet-200 bg-white px-4 py-3 font-bold text-slate-950 outline-none focus:border-violet-500"
+      className={`rounded-xl border bg-white px-4 py-3 font-bold text-slate-950 outline-none ${tone.input}`}
     >
       <option value="">
         {placeholder}
       </option>
 
-      {unpairedPlayers
+      {selectablePlayers
         .filter(
           (player) =>
             player.id !== excludeId
@@ -115,12 +186,12 @@ export default function FixedPairsEditor({
   );
 
   return (
-    <div className="rounded-2xl border border-violet-200 bg-violet-50 p-5 text-slate-950">
-      <p className="text-xs font-black uppercase tracking-widest text-violet-700">
-        Fixed Pairs
+    <div className={`rounded-2xl border p-5 text-slate-950 ${tone.box}`}>
+      <p className={`text-xs font-black uppercase tracking-widest ${tone.heading}`}>
+        {copy.title}
       </p>
 
-      <p className="mt-1 text-sm text-violet-900/70">
+      <p className={`mt-1 text-sm ${tone.text}`}>
         {description}
       </p>
 
@@ -149,9 +220,9 @@ export default function FixedPairsEditor({
           onClick={() =>
             void handleAdd()
           }
-          className="rounded-xl bg-violet-600 px-5 py-3 font-black text-white hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+          className={`rounded-xl px-5 py-3 font-black text-white disabled:cursor-not-allowed disabled:opacity-50 ${tone.button}`}
         >
-          {saving ? "SAVING..." : "PAIR"}
+          {saving ? "SAVING..." : copy.addLabel}
         </button>
       </div>
 
@@ -160,12 +231,12 @@ export default function FixedPairsEditor({
           {pairs.map((pair) => (
             <div
               key={`${pair.playerA}-${pair.playerB}`}
-              className="flex items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 ring-1 ring-violet-200"
+              className={`flex items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 ring-1 ${tone.row}`}
             >
               <p className="min-w-0 truncate font-black">
                 {nameOf(pair.playerA)}
-                <span className="px-2 text-violet-500">
-                  &
+                <span className={`px-2 ${tone.joiner}`}>
+                  {copy.joiner}
                 </span>
                 {nameOf(pair.playerB)}
               </p>
@@ -175,12 +246,12 @@ export default function FixedPairsEditor({
                 disabled={saving}
                 onClick={() =>
                   void run(() =>
-                    onRemove(pair.playerA)
+                    onRemove(pair)
                   )
                 }
-                className="shrink-0 rounded-lg border border-violet-200 px-4 py-2 text-xs font-black text-violet-600 hover:bg-violet-100 disabled:opacity-50"
+                className={`shrink-0 rounded-lg border px-4 py-2 text-xs font-black disabled:opacity-50 ${tone.remove}`}
               >
-                UNPAIR
+                {copy.removeLabel}
               </button>
             </div>
           ))}

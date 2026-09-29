@@ -127,6 +127,10 @@ export interface OpenPlayState {
 
   // Prefer evenly matched teams by skill level.
   skillBalance?: boolean;
+
+  // Players who should never be teammates
+  // (they can still be opponents).
+  keepApartPairs?: FixedPair[];
 }
 
 export interface ArchivedOpenPlaySession
@@ -145,13 +149,14 @@ function gameRef() {
 }
 
 /*
- * Pairs set up before a session starts.
+ * Fixed and keep-apart pairs set up before a
+ * session starts.
  * startOpenPlay moves them into the session.
  */
-function pendingFixedPairsRef() {
+function pendingPairRulesRef() {
   return ref(
     db,
-    "openPlay/pendingFixedPairs"
+    "openPlay/pendingPairRules"
   );
 }
 
@@ -476,12 +481,8 @@ function createPairedInitialCycle(
     );
   }
 
-  const fixedPartners = new Map<string, string>();
-
-  for (const pair of fixedPairs) {
-    fixedPartners.set(pair.playerA, pair.playerB);
-    fixedPartners.set(pair.playerB, pair.playerA);
-  }
+  const fixedPartners =
+    buildFixedPartnerMap(fixedPairs);
 
   const playerById = new Map(
     players.map((player) => [
@@ -584,8 +585,15 @@ export async function startOpenPlay(
   courtCount: number,
   durationHours: number,
   players: QueuePlayer[],
-  fixedPairs: FixedPair[] = [],
-  skillBalance = false
+  {
+    fixedPairs = [],
+    keepApartPairs = [],
+    skillBalance = false,
+  }: {
+    fixedPairs?: FixedPair[];
+    keepApartPairs?: FixedPair[];
+    skillBalance?: boolean;
+  } = {}
 ): Promise<void> {
 
   if (
@@ -616,12 +624,15 @@ export async function startOpenPlay(
     players.map((player) => player.id)
   );
 
+  const bothJoined = (pair: FixedPair) =>
+    playerIds.has(pair.playerA) &&
+    playerIds.has(pair.playerB);
+
   const sessionPairs =
-    fixedPairs.filter(
-      (pair) =>
-        playerIds.has(pair.playerA) &&
-        playerIds.has(pair.playerB)
-    );
+    fixedPairs.filter(bothJoined);
+
+  const sessionKeepApart =
+    keepApartPairs.filter(bothJoined);
 
   const cycle =
     createPairedInitialCycle(
@@ -630,31 +641,28 @@ export async function startOpenPlay(
       sessionPairs
     );
 
-  const fixedPartners = new Map<string, string>();
+  const rules = buildMixRules(
+    sessionPairs,
+    sessionKeepApart,
+    skillBalance
+  );
 
-  for (const pair of sessionPairs) {
-    fixedPartners.set(pair.playerA, pair.playerB);
-    fixedPartners.set(pair.playerB, pair.playerA);
-  }
-
+  // No history yet, so this only applies the
+  // admin's rules (pairs, keep-apart, skill).
+  // With no rules it keeps the queue order.
   const courts =
     cycle.courts.map(
       (court) =>
         convertCourt(
-          skillBalance
-            ? {
-                ...court,
-                // No history yet, so this only
-                // balances skill and keeps pairs.
-                players: chooseBestTeamPairing(
-                  court.players,
-                  new Map(),
-                  new Map(),
-                  fixedPartners,
-                  true
-                ),
-              }
-            : court,
+          {
+            ...court,
+            players: chooseBestTeamPairing(
+              court.players,
+              new Map(),
+              new Map(),
+              rules
+            ),
+          },
           startedAt
         )
     );
@@ -690,6 +698,9 @@ export async function startOpenPlay(
 
   state.skillBalance =
     skillBalance;
+
+  state.keepApartPairs =
+    sessionKeepApart;
 
   state.cycles = [
     {
@@ -743,36 +754,91 @@ export async function startOpenPlay(
 
   // The pairs now live in the session.
   await remove(
-    pendingFixedPairsRef()
+    pendingPairRulesRef()
   );
 }
 
 // ======================================================
-// FIXED PAIRS BEFORE A SESSION
+// PAIR RULES (FIXED PAIRS AND KEEP-APART)
 // ======================================================
+
+export type PairKind =
+  | "fixed"
+  | "keepApart";
+
+export interface PairRules {
+  fixedPairs: FixedPair[];
+  keepApartPairs: FixedPair[];
+}
+
+const PAIR_RULE_FIELD: Record<
+  PairKind,
+  keyof PairRules
+> = {
+  fixed: "fixedPairs",
+  keepApart: "keepApartPairs",
+};
+
+function samePair(
+  pair: FixedPair,
+  playerAId: string,
+  playerBId: string
+): boolean {
+  return (
+    pairKey(pair.playerA, pair.playerB) ===
+    pairKey(playerAId, playerBId)
+  );
+}
 
 /*
  * Returns an error message when the new pair is not
  * allowed, or null when it is fine.
  */
-function getFixedPairError(
-  existingPairs: FixedPair[],
+function getPairRuleError(
+  kind: PairKind,
+  rules: PairRules,
   playerAId: string,
   playerBId: string
 ): string | null {
   if (!playerAId || !playerBId) {
-    return "Choose two players to pair.";
+    return "Choose two players.";
   }
 
   if (playerAId === playerBId) {
-    return "A player cannot be paired with themselves.";
+    return "Choose two different players.";
+  }
+
+  const isFixed = rules.fixedPairs.some(
+    (pair) =>
+      samePair(pair, playerAId, playerBId)
+  );
+
+  const isKeptApart =
+    rules.keepApartPairs.some((pair) =>
+      samePair(pair, playerAId, playerBId)
+    );
+
+  if (kind === "keepApart") {
+    if (isKeptApart) {
+      return "These players are already kept apart.";
+    }
+
+    if (isFixed) {
+      return "These players are a fixed pair. Unpair them first.";
+    }
+
+    return null;
+  }
+
+  if (isKeptApart) {
+    return "These players are set to be kept apart. Remove that first.";
   }
 
   const alreadyPaired = [
     playerAId,
     playerBId,
   ].some((id) =>
-    existingPairs.some(
+    rules.fixedPairs.some(
       (pair) =>
         pair.playerA === id ||
         pair.playerB === id
@@ -786,34 +852,49 @@ function getFixedPairError(
   return null;
 }
 
-export function subscribeToPendingFixedPairs(
-  callback: (pairs: FixedPair[]) => void
+function normalizePairRules(
+  value: Partial<PairRules> | null
+): PairRules {
+  return {
+    fixedPairs: value?.fixedPairs ?? [],
+    keepApartPairs:
+      value?.keepApartPairs ?? [],
+  };
+}
+
+// ------------------------------------------------------
+// BEFORE A SESSION
+// ------------------------------------------------------
+
+export function subscribeToPendingPairRules(
+  callback: (rules: PairRules) => void
 ): () => void {
   return onValue(
-    pendingFixedPairsRef(),
+    pendingPairRulesRef(),
     (snapshot) => {
       callback(
-        (snapshot.val() as FixedPair[] | null) ??
-          []
+        normalizePairRules(snapshot.val())
       );
     }
   );
 }
 
-export async function addPendingFixedPair(
+export async function addPendingPair(
+  kind: PairKind,
   playerAId: string,
   playerBId: string
 ): Promise<void> {
   let failureMessage: string | null = null;
 
   const result = await runTransaction(
-    pendingFixedPairsRef(),
+    pendingPairRulesRef(),
     (current) => {
-      const pairs =
-        (current as FixedPair[] | null) ?? [];
+      const rules =
+        normalizePairRules(current);
 
-      failureMessage = getFixedPairError(
-        pairs,
+      failureMessage = getPairRuleError(
+        kind,
+        rules,
         playerAId,
         playerBId
       );
@@ -822,36 +903,51 @@ export async function addPendingFixedPair(
         return;
       }
 
-      return [
-        ...pairs,
+      const field = PAIR_RULE_FIELD[kind];
+
+      rules[field] = [
+        ...rules[field],
         {
           playerA: playerAId,
           playerB: playerBId,
         },
       ];
+
+      return rules;
     }
   );
 
   if (!result.committed) {
     throw new Error(
       failureMessage ??
-      "Unable to pair players. Please try again."
+      "Unable to save. Please try again."
     );
   }
 }
 
-export async function removePendingFixedPair(
-  playerId: string
+export async function removePendingPair(
+  kind: PairKind,
+  pair: FixedPair
 ): Promise<void> {
   await runTransaction(
-    pendingFixedPairsRef(),
-    (current) =>
-      ((current as FixedPair[] | null) ?? [])
-        .filter(
-          (pair) =>
-            pair.playerA !== playerId &&
-            pair.playerB !== playerId
-        )
+    pendingPairRulesRef(),
+    (current) => {
+      const rules =
+        normalizePairRules(current);
+
+      const field = PAIR_RULE_FIELD[kind];
+
+      rules[field] = rules[field].filter(
+        (item) =>
+          !samePair(
+            item,
+            pair.playerA,
+            pair.playerB
+          )
+      );
+
+      return rules;
+    }
   );
 }
 
@@ -920,6 +1016,7 @@ export function subscribeToOpenPlay(
         fixedPairs: raw.fixedPairs ?? [],
         onBreakIds: raw.onBreakIds ?? [],
         skillBalance: raw.skillBalance ?? false,
+        keepApartPairs: raw.keepApartPairs ?? [],
       } as OpenPlayState;
 
       callback(normalizedState);
@@ -1281,14 +1378,14 @@ function getPairHistoryCount(
 type FixedPartnerMap = Map<string, string>;
 
 function buildFixedPartnerMap(
-  state: OpenPlayState
+  fixedPairs: FixedPair[]
 ): FixedPartnerMap {
   const partners: FixedPartnerMap =
     new Map();
 
   for (
     const pair of
-      state.fixedPairs ?? []
+      fixedPairs
   ) {
     partners.set(
       pair.playerA,
@@ -1302,6 +1399,75 @@ function buildFixedPartnerMap(
   }
 
   return partners;
+}
+
+/*
+ * Everything the mixer needs to know about the
+ * admin's matching preferences.
+ */
+type MixRules = {
+  fixedPartners: FixedPartnerMap;
+  // pairKey()s of players who must not be teammates.
+  keepApart: Set<string>;
+  skillBalance: boolean;
+};
+
+function buildMixRules(
+  fixedPairs: FixedPair[],
+  keepApartPairs: FixedPair[],
+  skillBalance: boolean
+): MixRules {
+  return {
+    fixedPartners:
+      buildFixedPartnerMap(fixedPairs),
+    keepApart: new Set(
+      keepApartPairs.map((pair) =>
+        pairKey(pair.playerA, pair.playerB)
+      )
+    ),
+    skillBalance,
+  };
+}
+
+function buildMixRulesFromState(
+  state: OpenPlayState
+): MixRules {
+  return buildMixRules(
+    state.fixedPairs ?? [],
+    state.keepApartPairs ?? [],
+    state.skillBalance === true
+  );
+}
+
+/*
+ * Keep-apart teammates are effectively forbidden,
+ * but as a penalty rather than a hard filter so a
+ * court can still be filled if there is no way
+ * around it.
+ */
+const KEEP_APART_PENALTY = 100000;
+
+function getKeepApartPenalty(
+  lineup: QueuePlayer[],
+  rules: MixRules
+): number {
+  if (
+    rules.keepApart.size === 0 ||
+    lineup.length !== 4
+  ) {
+    return 0;
+  }
+
+  const [a1, a2, b1, b2] = lineup;
+
+  return [
+    [a1, a2],
+    [b1, b2],
+  ].filter(([x, y]) =>
+    rules.keepApart.has(
+      pairKey(x.id, y.id)
+    )
+  ).length * KEEP_APART_PENALTY;
 }
 
 function isFixedPair(
@@ -1504,12 +1670,13 @@ function chooseBestTeamPairing(
   players: QueuePlayer[],
   partnerHistory: PairHistory,
   opponentHistory: PairHistory,
-  fixedPartners: FixedPartnerMap,
-  skillBalance = false
+  rules: MixRules
 ): QueuePlayer[] {
   if (players.length !== 4) {
     return players;
   }
+
+  const { fixedPartners } = rules;
 
   const [
     p1,
@@ -1627,7 +1794,11 @@ function chooseBestTeamPairing(
       opponentRepeats * 25 +
       getSkillImbalancePenalty(
         option,
-        skillBalance
+        rules.skillBalance
+      ) +
+      getKeepApartPenalty(
+        option,
+        rules
       );
 
     if (score < bestScore) {
@@ -1693,11 +1864,13 @@ function chooseFairCourtPlayers(
   queuePosition: Map<string, number>,
   partnerHistory: PairHistory,
   opponentHistory: PairHistory,
-  fixedPartners: FixedPartnerMap
+  rules: MixRules
 ): QueuePlayer[] {
   if (availablePlayers.length < 4) {
     return [];
   }
+
+  const { fixedPartners } = rules;
 
   /*
    * A paired player whose partner is still on
@@ -1952,8 +2125,7 @@ function chooseFairCourtPlayers(
         combination,
         partnerHistory,
         opponentHistory,
-        fixedPartners,
-        state.skillBalance === true
+        rules
       );
 
     const [
@@ -1999,7 +2171,11 @@ function chooseFairCourtPlayers(
       queuePenalty +
       getSkillImbalancePenalty(
         pairedPlayers,
-        state.skillBalance === true
+        rules.skillBalance
+      ) +
+      getKeepApartPenalty(
+        pairedPlayers,
+        rules
       );
 
     if (totalScore < bestScore) {
@@ -2145,7 +2321,7 @@ export async function startNextCycle(): Promise<void> {
           queuePosition,
           partnerHistory,
           opponentHistory,
-          buildFixedPartnerMap(state)
+          buildMixRulesFromState(state)
         );
 
       if (
@@ -2689,18 +2865,27 @@ export async function linkGuestPlayerToAccount(
           })
         );
 
+      const relinkPair = (
+        pair: FixedPair
+      ): FixedPair => ({
+        playerA:
+          pair.playerA === guestPlayerId
+            ? accountPlayer.id
+            : pair.playerA,
+        playerB:
+          pair.playerB === guestPlayerId
+            ? accountPlayer.id
+            : pair.playerB,
+      });
+
       state.fixedPairs =
         (state.fixedPairs ?? []).map(
-          (pair) => ({
-            playerA:
-              pair.playerA === guestPlayerId
-                ? accountPlayer.id
-                : pair.playerA,
-            playerB:
-              pair.playerB === guestPlayerId
-                ? accountPlayer.id
-                : pair.playerB,
-          })
+          relinkPair
+        );
+
+      state.keepApartPairs =
+        (state.keepApartPairs ?? []).map(
+          relinkPair
         );
 
       state.onBreakIds =
@@ -2842,6 +3027,13 @@ export async function removePlayerFromSession(
           (id) => id !== playerId
         );
 
+      state.keepApartPairs =
+        (state.keepApartPairs ?? []).filter(
+          (pair) =>
+            pair.playerA !== playerId &&
+            pair.playerB !== playerId
+        );
+
       // Keep playerStats so completed historical
       // games and rankings remain correct.
       failureMessage = null;
@@ -2936,10 +3128,11 @@ export async function setPlayerBreak(
 }
 
 // ======================================================
-// ADMIN - FIXED PAIRS
+// ADMIN - PAIR RULES DURING A SESSION
 // ======================================================
 
-export async function addFixedPair(
+export async function addSessionPair(
+  kind: PairKind,
   playerAId: string,
   playerBId: string
 ): Promise<void> {
@@ -2963,27 +3156,26 @@ export async function addFixedPair(
         return;
       }
 
-      const players = state.players ?? [];
-
-      const playerA = players.find(
-        (player) => player.id === playerAId
+      const sessionIds = new Set(
+        (state.players ?? []).map(
+          (player) => player.id
+        )
       );
 
-      const playerB = players.find(
-        (player) => player.id === playerBId
-      );
-
-      if (!playerA || !playerB) {
+      if (
+        !sessionIds.has(playerAId) ||
+        !sessionIds.has(playerBId)
+      ) {
         failureMessage =
           "Both players must be part of this session.";
         return;
       }
 
-      const fixedPairs =
-        state.fixedPairs ?? [];
+      const rules = normalizePairRules(state);
 
-      failureMessage = getFixedPairError(
-        fixedPairs,
+      failureMessage = getPairRuleError(
+        kind,
+        rules,
         playerAId,
         playerBId
       );
@@ -2992,8 +3184,10 @@ export async function addFixedPair(
         return;
       }
 
-      state.fixedPairs = [
-        ...fixedPairs,
+      const field = PAIR_RULE_FIELD[kind];
+
+      state[field] = [
+        ...rules[field],
         {
           playerA: playerAId,
           playerB: playerBId,
@@ -3008,13 +3202,14 @@ export async function addFixedPair(
   if (!result.committed) {
     throw new Error(
       failureMessage ??
-      "Unable to pair players because the session changed."
+      "Unable to save because the session changed."
     );
   }
 }
 
-export async function removeFixedPair(
-  playerId: string
+export async function removeSessionPair(
+  kind: PairKind,
+  pair: FixedPair
 ): Promise<void> {
   await runTransaction(
     gameRef(),
@@ -3026,12 +3221,18 @@ export async function removeFixedPair(
         return;
       }
 
-      state.fixedPairs =
-        (state.fixedPairs ?? []).filter(
-          (pair) =>
-            pair.playerA !== playerId &&
-            pair.playerB !== playerId
-        );
+      const field = PAIR_RULE_FIELD[kind];
+
+      state[field] = (
+        state[field] ?? []
+      ).filter(
+        (item) =>
+          !samePair(
+            item,
+            pair.playerA,
+            pair.playerB
+          )
+      );
 
       return state;
     }
