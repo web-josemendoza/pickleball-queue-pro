@@ -1,5 +1,6 @@
 import PlayerAuth from "./components/PlayerAuth";
 import FixedPairsEditor from "./components/FixedPairsEditor";
+import { usePlayerAlerts } from "./hooks/usePlayerAlerts";
 
 import { subscribeToAuth } from "./lib/auth";
 
@@ -669,6 +670,30 @@ const upNextCount =
   game?.status === "active"
     ? 4
     : 0;
+
+const myPlayingCourtNumber =
+  game?.status === "active"
+    ? game.courts.find(
+        (court) =>
+          court.status === "playing" &&
+          court.players.some(
+            (player) =>
+              player.id === myPlayerId
+          )
+      )?.courtNumber ?? null
+    : null;
+
+const {
+  alertsEnabled,
+  enableAlerts,
+  disableAlerts,
+  activeAlert,
+  dismissAlert,
+} = usePlayerAlerts(
+  myPlayingCourtNumber,
+  myWaitingPosition !== null &&
+    myWaitingPosition <= upNextCount
+);
 
 const upNextPlayers = useMemo(() => {
   if (!game || game.status !== "active") {
@@ -2618,6 +2643,32 @@ const handleAddGuestPlayer =
   return (
     <div className="min-h-screen bg-slate-100 text-slate-950">
 
+      {activeAlert && (
+        <div className="fixed inset-x-0 top-0 z-[130] flex justify-center p-4">
+          <div
+            role="alert"
+            className="flex w-full max-w-md items-center gap-4 rounded-2xl bg-emerald-500 p-4 text-white shadow-2xl"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="text-lg font-black">
+                {activeAlert.title}
+              </p>
+              <p className="text-sm font-semibold text-emerald-50">
+                {activeAlert.body}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={dismissAlert}
+              className="rounded-lg bg-white/20 px-3 py-2 font-black hover:bg-white/30"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ============================================= */}
       {/* HEADER */}
       {/* ============================================= */}
@@ -3191,6 +3242,26 @@ const handleAddGuestPlayer =
                     ? "You are registered and waiting in the player queue."
                     : "You are not registered in this session."}
               </p>
+
+              {isMyPlayerRegistered && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    alertsEnabled
+                      ? disableAlerts()
+                      : void enableAlerts()
+                  }
+                  className={
+                    alertsEnabled
+                      ? "mt-4 w-full rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-xs font-black uppercase tracking-wider text-emerald-700 transition hover:bg-emerald-100"
+                      : "mt-4 w-full rounded-xl bg-cyan-600 px-4 py-3 text-xs font-black uppercase tracking-wider text-white transition hover:bg-cyan-500"
+                  }
+                >
+                  {alertsEnabled
+                    ? "🔔 Alerts on · tap to turn off"
+                    : "🔔 Alert me when I'm up"}
+                </button>
+              )}
 
             </section>
 
