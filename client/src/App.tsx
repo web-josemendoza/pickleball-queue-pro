@@ -1,5 +1,6 @@
 import PlayerAuth from "./components/PlayerAuth";
 import PairRulesEditor from "./components/PairRulesEditor";
+import PlayerStatsModal from "./components/PlayerStatsModal";
 import { usePlayerAlerts } from "./hooks/usePlayerAlerts";
 import {
   formatClock,
@@ -373,6 +374,11 @@ const [
   setSetupSkillBalance,
 ] = useState(false);
 
+const [
+  statsPlayerId,
+  setStatsPlayerId,
+] = useState<string | null>(null);
+
 const onBreakIds = useMemo(
   () => new Set(game?.onBreakIds ?? []),
   [game]
@@ -707,6 +713,37 @@ const upNextCount =
     ? 4
     : 0;
 
+// Saved sessions plus the live one, each once.
+const statsSessions = useMemo(() => {
+  const archivedIds = new Set(
+    archivedSessions.map(
+      (session) => session.sessionId
+    )
+  );
+
+  return game && !archivedIds.has(game.sessionId)
+    ? [...archivedSessions, game]
+    : archivedSessions;
+}, [archivedSessions, game]);
+
+// Everyone who has appeared in any session, for
+// the admin's player picker.
+const statsPlayerOptions = useMemo(() => {
+  const names = new Map<string, string>();
+
+  for (const session of statsSessions) {
+    for (const player of session.players ?? []) {
+      names.set(player.id, player.name);
+    }
+  }
+
+  return [...names.entries()]
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
+}, [statsSessions]);
+
 const myPlayingCourtNumber =
   game?.status === "active"
     ? game.courts.find(
@@ -819,7 +856,19 @@ const orderedPlayerPool = useMemo(() => {
 
   const isAdmin =
   playerProfile?.role === "admin";
-  
+
+  const statsModal = statsPlayerId && (
+    <PlayerStatsModal
+      key={statsPlayerId}
+      sessions={statsSessions}
+      initialPlayerId={statsPlayerId}
+      playerOptions={
+        isAdmin ? statsPlayerOptions : undefined
+      }
+      onClose={() => setStatsPlayerId(null)}
+    />
+  );
+
   const recentResults = useMemo(() => {
   if (!game) return [];
 
@@ -2060,9 +2109,6 @@ const handleAddGuestPlayer =
                   4-On / 4-Off Open Play
                 </h1>
               </div>
-              <div className="rounded-lg bg-yellow-300 px-3 py-2 font-black text-black">
-  ROLE: {playerProfile?.role ?? "NO ROLE"}
-</div>
               <span className="rounded-full bg-cyan-500/10 px-4 py-2 text-sm font-bold text-cyan-300">
                 {game?.status === "finished" ? "SESSION FINISHED" : "SETUP"}
               </span>
@@ -2174,6 +2220,18 @@ const handleAddGuestPlayer =
     <div className="mt-4 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700">
       ✓ SIGNED IN
     </div>
+
+    {myPlayerId && (
+      <button
+        type="button"
+        onClick={() =>
+          setStatsPlayerId(myPlayerId)
+        }
+        className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-700 hover:bg-slate-100"
+      >
+        📊 My Stats
+      </button>
+    )}
   </div>
 )}
 <button
@@ -2770,6 +2828,8 @@ const handleAddGuestPlayer =
 </div>
           </section>
         </main>
+
+        {statsModal}
       </div>
     );
   }
@@ -2780,6 +2840,8 @@ const handleAddGuestPlayer =
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-950">
+
+      {statsModal}
 
       {activeAlert && (
         <div className="fixed inset-x-0 top-0 z-[130] flex justify-center p-4">
@@ -3067,6 +3129,20 @@ const handleAddGuestPlayer =
     className="mt-3 w-full rounded-xl bg-slate-950 px-4 py-3 text-xs font-black uppercase tracking-wider text-white transition hover:bg-slate-800"
   >
     MANAGE PLAYERS
+  </button>
+)}
+
+{isAdmin && statsPlayerOptions.length > 0 && (
+  <button
+    type="button"
+    onClick={() =>
+      setStatsPlayerId(
+        statsPlayerOptions[0].id
+      )
+    }
+    className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-700 transition hover:bg-slate-100"
+  >
+    PLAYER STATS
   </button>
 )}
 
@@ -3478,6 +3554,18 @@ const handleAddGuestPlayer =
                   {alertsEnabled
                     ? "🔔 Alerts on · tap to turn off"
                     : "🔔 Alert me when I'm up"}
+                </button>
+              )}
+
+              {myPlayerId && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setStatsPlayerId(myPlayerId)
+                  }
+                  className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-700 transition hover:bg-slate-100"
+                >
+                  📊 My Stats
                 </button>
               )}
 
