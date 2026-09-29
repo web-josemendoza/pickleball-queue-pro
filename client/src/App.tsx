@@ -50,6 +50,7 @@ import {
   removePlayerFromSession,
   saveCourtDraftScore,
   setPlayerBreak,
+  setSkillBalance,
   startNextCycle,
   startOpenPlay,
   subscribeToOpenPlay,
@@ -357,6 +358,11 @@ const [
   pendingFixedPairs,
   setPendingFixedPairs,
 ] = useState<FixedPair[]>([]);
+
+const [
+  setupSkillBalance,
+  setSetupSkillBalance,
+] = useState(false);
 
 const onBreakIds = useMemo(
   () => new Set(game?.onBreakIds ?? []),
@@ -1071,7 +1077,8 @@ const sessionStats = useMemo(() => {
   courtCount,
   durationHours,
   players,
-  pendingFixedPairs
+  pendingFixedPairs,
+  setupSkillBalance
 );
     } catch (error) {
       console.error("Unable to start open play:", error);
@@ -2529,6 +2536,27 @@ const handleAddGuestPlayer =
                   <strong>Rotation:</strong> every court has 4 players. When a court finishes, the next 4 are chosen by fewest games played and longest wait, mixing partners and opponents as much as possible.
                 </div>
 
+                <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl bg-slate-900 p-4">
+                  <input
+                    type="checkbox"
+                    checked={setupSkillBalance}
+                    onChange={(event) =>
+                      setSetupSkillBalance(
+                        event.target.checked
+                      )
+                    }
+                    className="mt-1 h-5 w-5 accent-cyan-500"
+                  />
+                  <span>
+                    <span className="block font-black text-white">
+                      Balance teams by skill
+                    </span>
+                    <span className="mt-1 block text-sm text-slate-400">
+                      Prefer evenly matched teams using player skill levels. Fair turns and partner variety still come first.
+                    </span>
+                  </span>
+                </label>
+
                 <div className="mt-5">
                   <FixedPairsEditor
                     players={players}
@@ -3732,6 +3760,36 @@ const handleAddGuestPlayer =
 
           </div>
         </div>
+
+        {/* SKILL BALANCE */}
+        <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-2xl border border-cyan-200 bg-cyan-50 p-5">
+          <input
+            type="checkbox"
+            checked={game.skillBalance === true}
+            onChange={(event) =>
+              void setSkillBalance(
+                event.target.checked
+              ).catch((error) => {
+                console.error(
+                  "Unable to update skill balance:",
+                  error
+                );
+                alert(
+                  "Unable to update skill balance."
+                );
+              })
+            }
+            className="mt-1 h-5 w-5 accent-cyan-600"
+          />
+          <span>
+            <span className="block font-black">
+              Balance teams by skill
+            </span>
+            <span className="mt-1 block text-sm text-slate-500">
+              Applies from the next rotation.
+            </span>
+          </span>
+        </label>
 
         {/* FIXED PAIRS */}
         <div className="mt-6">

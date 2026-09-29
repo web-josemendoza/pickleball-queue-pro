@@ -124,6 +124,9 @@ export interface OpenPlayState {
    * skips them until they come back.
    */
   onBreakIds?: string[];
+
+  // Prefer evenly matched teams by skill level.
+  skillBalance?: boolean;
 }
 
 export interface ArchivedOpenPlaySession
@@ -581,7 +584,8 @@ export async function startOpenPlay(
   courtCount: number,
   durationHours: number,
   players: QueuePlayer[],
-  fixedPairs: FixedPair[] = []
+  fixedPairs: FixedPair[] = [],
+  skillBalance = false
 ): Promise<void> {
 
   if (
@@ -626,11 +630,31 @@ export async function startOpenPlay(
       sessionPairs
     );
 
+  const fixedPartners = new Map<string, string>();
+
+  for (const pair of sessionPairs) {
+    fixedPartners.set(pair.playerA, pair.playerB);
+    fixedPartners.set(pair.playerB, pair.playerA);
+  }
+
   const courts =
     cycle.courts.map(
       (court) =>
         convertCourt(
-          court,
+          skillBalance
+            ? {
+                ...court,
+                // No history yet, so this only
+                // balances skill and keeps pairs.
+                players: chooseBestTeamPairing(
+                  court.players,
+                  new Map(),
+                  new Map(),
+                  fixedPartners,
+                  true
+                ),
+              }
+            : court,
           startedAt
         )
     );
@@ -663,6 +687,9 @@ export async function startOpenPlay(
 
   state.fixedPairs =
     sessionPairs;
+
+  state.skillBalance =
+    skillBalance;
 
   state.cycles = [
     {
@@ -892,6 +919,7 @@ export function subscribeToOpenPlay(
         playerStats: raw.playerStats ?? {},
         fixedPairs: raw.fixedPairs ?? [],
         onBreakIds: raw.onBreakIds ?? [],
+        skillBalance: raw.skillBalance ?? false,
       } as OpenPlayState;
 
       callback(normalizedState);
@@ -1427,11 +1455,57 @@ function buildMatchHistory(
 // TEST THE THREE POSSIBLE TEAM COMBINATIONS
 // ------------------------------------------------------
 
+// ------------------------------------------------------
+// SKILL BALANCE
+// ------------------------------------------------------
+
+/*
+ * Cost per skill level of difference between the
+ * two teams' combined ratings. A repeat partner
+ * (1000) still outweighs ~3 levels of imbalance.
+ */
+const SKILL_GAP_PENALTY = 300;
+
+function skillValue(
+  player: QueuePlayer
+): number {
+  const level = player.skillLevel;
+
+  if (level === "5.0+") {
+    return 5.5;
+  }
+
+  return typeof level === "number"
+    ? level
+    : 3.0;
+}
+
+function getSkillImbalancePenalty(
+  lineup: QueuePlayer[],
+  skillBalance: boolean
+): number {
+  if (!skillBalance || lineup.length !== 4) {
+    return 0;
+  }
+
+  const [a1, a2, b1, b2] = lineup;
+
+  const gap = Math.abs(
+    skillValue(a1) +
+      skillValue(a2) -
+      skillValue(b1) -
+      skillValue(b2)
+  );
+
+  return gap * SKILL_GAP_PENALTY;
+}
+
 function chooseBestTeamPairing(
   players: QueuePlayer[],
   partnerHistory: PairHistory,
   opponentHistory: PairHistory,
-  fixedPartners: FixedPartnerMap
+  fixedPartners: FixedPartnerMap,
+  skillBalance = false
 ): QueuePlayer[] {
   if (players.length !== 4) {
     return players;
@@ -1550,7 +1624,11 @@ function chooseBestTeamPairing(
      */
     const score =
       partnerRepeats * 1000 +
-      opponentRepeats * 25;
+      opponentRepeats * 25 +
+      getSkillImbalancePenalty(
+        option,
+        skillBalance
+      );
 
     if (score < bestScore) {
       bestScore = score;
@@ -1874,7 +1952,8 @@ function chooseFairCourtPlayers(
         combination,
         partnerHistory,
         opponentHistory,
-        fixedPartners
+        fixedPartners,
+        state.skillBalance === true
       );
 
     const [
@@ -1917,7 +1996,11 @@ function chooseFairCourtPlayers(
       gameFairnessPenalty +
       partnerPenalty * 1000 +
       opponentPenalty * 25 +
-      queuePenalty;
+      queuePenalty +
+      getSkillImbalancePenalty(
+        pairedPlayers,
+        state.skillBalance === true
+      );
 
     if (totalScore < bestScore) {
       bestScore = totalScore;
@@ -2772,6 +2855,29 @@ export async function removePlayerFromSession(
       "Unable to remove player because the session changed."
     );
   }
+}
+
+// ======================================================
+// ADMIN - SKILL BALANCE
+// ======================================================
+
+export async function setSkillBalance(
+  enabled: boolean
+): Promise<void> {
+  await runTransaction(
+    gameRef(),
+    (current) => {
+      const state =
+        current as OpenPlayState | null;
+
+      if (!state || state.status !== "active") {
+        return;
+      }
+
+      state.skillBalance = enabled;
+      return state;
+    }
+  );
 }
 
 // ======================================================
