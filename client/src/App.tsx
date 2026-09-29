@@ -49,6 +49,7 @@ import {
   removePendingFixedPair,
   removePlayerFromSession,
   saveCourtDraftScore,
+  setPlayerBreak,
   startNextCycle,
   startOpenPlay,
   subscribeToOpenPlay,
@@ -357,6 +358,27 @@ const [
   setPendingFixedPairs,
 ] = useState<FixedPair[]>([]);
 
+const onBreakIds = useMemo(
+  () => new Set(game?.onBreakIds ?? []),
+  [game]
+);
+
+// Waiting players who can actually be called
+// to a court (not on break), in queue order.
+const readyWaitingPlayers = useMemo(() => {
+  if (!game || game.status !== "active") {
+    return [];
+  }
+
+  return (game.waitingPlayers ?? []).filter(
+    (player) => !onBreakIds.has(player.id)
+  );
+}, [game, onBreakIds]);
+
+const isMyPlayerOnBreak =
+  myPlayerId !== null &&
+  onBreakIds.has(myPlayerId);
+
   const myWaitingPosition = useMemo(() => {
   if (
     !game ||
@@ -366,9 +388,8 @@ const [
     return null;
   }
 
-  const index = (
-    game.waitingPlayers ?? []
-  ).findIndex(
+  const index =
+    readyWaitingPlayers.findIndex(
     (player) =>
       player.id === myPlayerId
   );
@@ -376,7 +397,7 @@ const [
   return index >= 0
     ? index + 1
     : null;
-}, [game, myPlayerId]);
+}, [game, myPlayerId, readyWaitingPlayers]);
 
 const myCourtNumber = useMemo(() => {
   if (
@@ -700,29 +721,31 @@ const upNextPlayers = useMemo(() => {
     return [];
   }
 
-  return (game.waitingPlayers ?? []).slice(
+  return readyWaitingPlayers.slice(
     0,
     upNextCount
   );
-}, [game, upNextCount]);
+}, [game, upNextCount, readyWaitingPlayers]);
 
 const laterWaitingPlayers = useMemo(() => {
   if (!game || game.status !== "active") {
     return [];
   }
 
-  return (game.waitingPlayers ?? []).slice(
+  return readyWaitingPlayers.slice(
     upNextCount
   );
-}, [game, upNextCount]);
+}, [game, upNextCount, readyWaitingPlayers]);
 
-const waitingPlayers = useMemo(() => {
-  if (!game || game.status !== "active") {
-    return [];
-  }
+const onBreakPlayers = useMemo(
+  () =>
+    (game?.waitingPlayers ?? []).filter(
+      (player) => onBreakIds.has(player.id)
+    ),
+  [game, onBreakIds]
+);
 
-  return game.waitingPlayers ?? [];
-}, [game]);
+const waitingPlayers = readyWaitingPlayers;
 
 const waitingPositionById = useMemo(() => {
   const positions = new Map<string, number>();
@@ -1272,12 +1295,18 @@ const handleNewSessionClearPlayers = async () => {
     };
   }
 
+  if (onBreakIds.has(playerId)) {
+    return {
+      label: "ON BREAK",
+      type: "break" as const,
+    };
+  }
+
   const waitingIndex =
-    (game.waitingPlayers ?? [])
-      .findIndex(
-        (player) =>
-          player.id === playerId
-      );
+    readyWaitingPlayers.findIndex(
+      (player) =>
+        player.id === playerId
+    );
 
   if (waitingIndex >= 0) {
     const upNextCount =
@@ -1854,6 +1883,38 @@ const handleAddGuestPlayer =
         setSavingGuestLink(false);
       }
     };
+
+  const [
+    savingBreakId,
+    setSavingBreakId,
+  ] = useState<string | null>(null);
+
+  const handleToggleBreak = async (
+    playerId: string,
+    onBreak: boolean
+  ) => {
+    setSavingBreakId(playerId);
+
+    try {
+      await setPlayerBreak(
+        playerId,
+        onBreak
+      );
+    } catch (error) {
+      console.error(
+        "Unable to update break:",
+        error
+      );
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Unable to update break status."
+      );
+    } finally {
+      setSavingBreakId(null);
+    }
+  };
 
   const getFixedPartner = (
     playerId: string
@@ -3145,6 +3206,49 @@ const handleAddGuestPlayer =
                 </div>
               )}
 
+              {onBreakPlayers.length > 0 && (
+                <div className="mt-6 border-t border-slate-200 pt-5">
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-xs font-black uppercase tracking-widest text-amber-600">
+                      On Break
+                    </p>
+
+                    <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-black text-amber-700">
+                      {onBreakPlayers.length}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {onBreakPlayers.map((player) => (
+                      <div
+                        key={player.id}
+                        className="flex items-center justify-between rounded-xl bg-amber-50 px-4 py-3"
+                      >
+                        <span className="truncate font-bold text-amber-900">
+                          ☕ {player.name}
+                        </span>
+
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            disabled={savingBreakId === player.id}
+                            onClick={() =>
+                              void handleToggleBreak(
+                                player.id,
+                                false
+                              )
+                            }
+                            className="ml-3 shrink-0 rounded-lg border border-amber-300 px-3 py-1 text-xs font-black text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                          >
+                            BACK IN
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
             </section>
 
             {/* ======================================= */}
@@ -3227,6 +3331,8 @@ const handleAddGuestPlayer =
 <p className="mt-2 text-sm font-semibold text-slate-700">
   {myCourtNumber !== null
     ? `You are currently playing on Court ${myCourtNumber}.`
+    : isMyPlayerOnBreak
+      ? "You are ON BREAK. You won't be called until you come back."
     : myWaitingPosition !== null
       ? myWaitingPosition <= upNextCount
         ? `You are UP NEXT #${myWaitingPosition}.`
@@ -3242,6 +3348,30 @@ const handleAddGuestPlayer =
                     ? "You are registered and waiting in the player queue."
                     : "You are not registered in this session."}
               </p>
+
+              {isMyPlayerRegistered && myPlayerId && (
+                <button
+                  type="button"
+                  disabled={savingBreakId === myPlayerId}
+                  onClick={() =>
+                    void handleToggleBreak(
+                      myPlayerId,
+                      !isMyPlayerOnBreak
+                    )
+                  }
+                  className={
+                    isMyPlayerOnBreak
+                      ? "mt-4 w-full rounded-xl bg-emerald-500 px-4 py-3 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-400 disabled:opacity-50"
+                      : "mt-4 w-full rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs font-black uppercase tracking-wider text-amber-700 transition hover:bg-amber-100 disabled:opacity-50"
+                  }
+                >
+                  {isMyPlayerOnBreak
+                    ? "I'm back, put me in the queue"
+                    : isMyPlayerOnCourt
+                      ? "Take a break after this game"
+                      : "☕ Take a break"}
+                </button>
+              )}
 
               {isMyPlayerRegistered && (
                 <button
@@ -3824,6 +3954,24 @@ const handleAddGuestPlayer =
                           )}
                         </>
                       )}
+
+                      <button
+                        type="button"
+                        disabled={
+                          savingBreakId === player.id
+                        }
+                        onClick={() =>
+                          void handleToggleBreak(
+                            player.id,
+                            !onBreakIds.has(player.id)
+                          )
+                        }
+                        className="rounded-lg border border-amber-200 px-4 py-2 text-xs font-black text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+                      >
+                        {onBreakIds.has(player.id)
+                          ? "END BREAK"
+                          : "BREAK"}
+                      </button>
 
                       <button
                         type="button"

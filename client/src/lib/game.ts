@@ -117,6 +117,13 @@ export interface OpenPlayState {
   // Optional so sessions saved before this
   // feature still load.
   fixedPairs?: FixedPair[];
+
+  /*
+   * Players sitting out for now. They keep their
+   * place in waitingPlayers but the rotation
+   * skips them until they come back.
+   */
+  onBreakIds?: string[];
 }
 
 export interface ArchivedOpenPlaySession
@@ -884,6 +891,7 @@ export function subscribeToOpenPlay(
         cycles,
         playerStats: raw.playerStats ?? {},
         fixedPairs: raw.fixedPairs ?? [],
+        onBreakIds: raw.onBreakIds ?? [],
       } as OpenPlayState;
 
       callback(normalizedState);
@@ -2014,7 +2022,19 @@ export async function startNextCycle(): Promise<void> {
           rotationMap.values()
         );
 
-      if (rotationQueue.length < 4) {
+      const onBreak = new Set(
+        state.onBreakIds ?? []
+      );
+
+      // Players on break keep their place in
+      // rotationQueue but cannot be picked.
+      const readyPlayers =
+        rotationQueue.filter(
+          (player) =>
+            !onBreak.has(player.id)
+        );
+
+      if (readyPlayers.length < 4) {
         return;
       }
 
@@ -2026,7 +2046,7 @@ export async function startNextCycle(): Promise<void> {
       const queuePosition =
         new Map<string, number>();
 
-      rotationQueue.forEach(
+      readyPlayers.forEach(
         (player, index) => {
           queuePosition.set(
             player.id,
@@ -2037,7 +2057,7 @@ export async function startNextCycle(): Promise<void> {
 
       const nextCourtPlayers =
         chooseFairCourtPlayers(
-          rotationQueue,
+          readyPlayers,
           state,
           queuePosition,
           partnerHistory,
@@ -2600,6 +2620,14 @@ export async function linkGuestPlayerToAccount(
           })
         );
 
+      state.onBreakIds =
+        (state.onBreakIds ?? []).map(
+          (id) =>
+            id === guestPlayerId
+              ? accountPlayer.id
+              : id
+        );
+
       state.playerStats =
         state.playerStats ?? {};
 
@@ -2726,6 +2754,11 @@ export async function removePlayerFromSession(
             pair.playerB !== playerId
         );
 
+      state.onBreakIds =
+        (state.onBreakIds ?? []).filter(
+          (id) => id !== playerId
+        );
+
       // Keep playerStats so completed historical
       // games and rankings remain correct.
       failureMessage = null;
@@ -2737,6 +2770,61 @@ export async function removePlayerFromSession(
     throw new Error(
       failureMessage ??
       "Unable to remove player because the session changed."
+    );
+  }
+}
+
+// ======================================================
+// PLAYER BREAKS
+// ======================================================
+
+export async function setPlayerBreak(
+  playerId: string,
+  onBreak: boolean
+): Promise<void> {
+  let failureMessage: string | null = null;
+
+  const result = await runTransaction(
+    gameRef(),
+    (current) => {
+      const state =
+        current as OpenPlayState | null;
+
+      if (!state || state.status !== "active") {
+        failureMessage =
+          "Open play is not active.";
+        return;
+      }
+
+      const player = (state.players ?? []).find(
+        (item) => item.id === playerId
+      );
+
+      if (!player) {
+        failureMessage =
+          "Player is not part of this session.";
+        return;
+      }
+
+      const others = (
+        state.onBreakIds ?? []
+      ).filter((id) => id !== playerId);
+
+      // Going on break mid-game is fine: it takes
+      // effect once their current court finishes.
+      state.onBreakIds = onBreak
+        ? [...others, playerId]
+        : others;
+
+      failureMessage = null;
+      return state;
+    }
+  );
+
+  if (!result.committed) {
+    throw new Error(
+      failureMessage ??
+      "Unable to update break status. Please try again."
     );
   }
 }
