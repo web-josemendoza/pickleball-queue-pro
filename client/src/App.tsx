@@ -2170,6 +2170,7 @@ const handleAddGuestPlayer =
   </div>
 
 </div>
+                  {isAdmin && (
                   <button
                   type="button"
                   onClick={() =>
@@ -2182,8 +2183,9 @@ const handleAddGuestPlayer =
                     ? "PLEASE WAIT..."
                     : "NEW SESSION"}
                 </button>
+                  )}
 
-                {showNewSessionOptions && (
+                {isAdmin && showNewSessionOptions && (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
     <div className="w-full max-w-md rounded-2xl bg-white p-6 text-slate-950 shadow-2xl">
 
@@ -2379,6 +2381,16 @@ const handleAddGuestPlayer =
 </div>
                 
               </section>
+            ) : !isAdmin ? (
+              <section className="rounded-2xl bg-slate-950 p-6 text-white shadow-xl">
+                <p className="text-xs font-black uppercase tracking-widest text-cyan-400">
+                  Before Starting
+                </p>
+                <h2 className="mt-1 text-3xl font-black">Waiting for Open Play</h2>
+                <p className="mt-2 max-w-2xl text-slate-400">
+                  Join the queue and hang tight. An admin will start the session once enough players are in.
+                </p>
+              </section>
             ) : (
               <section className="rounded-2xl bg-slate-950 p-6 text-white shadow-xl">
                 <p className="text-xs font-black uppercase tracking-widest text-cyan-400">
@@ -2428,7 +2440,7 @@ const handleAddGuestPlayer =
                 </div>
 
                 <div className="mt-5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-4 text-sm text-cyan-100">
-                  <strong>4-On / 4-Off:</strong> every court has 4 players. After all courts finish a cycle, winners are placed ahead of losers for the next cycle.
+                  <strong>Rotation:</strong> every court has 4 players. When a court finishes, the next 4 are chosen by fewest games played and longest wait, mixing partners and opponents as much as possible.
                 </div>
 
                 <div className="mt-5">
@@ -2602,17 +2614,6 @@ const handleAddGuestPlayer =
   // ==================================================
   // ACTIVE OPEN PLAY
   // ==================================================
-{isAdmin && (
-  <button type="button">
-    EDIT PLAYERS & TEAMS
-  </button>
-)}
-
-  {isAdmin && (
-  <span className="rounded-full bg-amber-400 px-3 py-1 text-xs font-black text-slate-950">
-    ADMIN
-  </span>
-)}
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-950">
@@ -2807,6 +2808,7 @@ const handleAddGuestPlayer =
             {/* SESSION CONTROL */}
             {/* ======================================= */}
 
+            {isAdmin && (
             <section className="rounded-2xl bg-slate-950 p-5 text-white shadow-xl">
 
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -2840,6 +2842,7 @@ const handleAddGuestPlayer =
               </div>
 
             </section>
+            )}
 
           </section>
 

@@ -1,0 +1,30 @@
+{
+  "rules": {
+    "players": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && (auth.uid === $uid || root.child('players').child(auth.uid).child('role').val() === 'admin')",
+        "role": {
+          ".validate": "newData.val() === data.val() || (!data.exists() && newData.val() === 'player') || root.child('players').child(auth.uid).child('role').val() === 'admin'"
+        }
+      }
+    },
+
+    "queue": {
+      ".read": true,
+      ".write": "auth != null && root.child('players').child(auth.uid).child('role').val() === 'admin'",
+      "$playerId": {
+        ".write": "auth != null && (auth.uid === $playerId || root.child('players').child(auth.uid).child('role').val() === 'admin')"
+      }
+    },
+
+    "openPlay": {
+      ".read": true,
+      ".write": "auth != null && root.child('players').child(auth.uid).child('role').val() === 'admin'",
+
+      "game": {
+        ".write": "auth != null"
+      }
+    }
+  }
+}
