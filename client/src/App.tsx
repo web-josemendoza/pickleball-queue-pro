@@ -1,6 +1,12 @@
 import PlayerAuth from "./components/PlayerAuth";
 import PairRulesEditor from "./components/PairRulesEditor";
 import { usePlayerAlerts } from "./hooks/usePlayerAlerts";
+import {
+  formatClock,
+  getCourtElapsedMs,
+  isLongGame,
+  LONG_GAME_MINUTES,
+} from "./lib/courtTiming";
 
 import { subscribeToAuth } from "./lib/auth";
 
@@ -1639,10 +1645,16 @@ const handleSaveAdminLineup =
       court.scoreB !== null &&
       court.scoreB > court.scoreA;
 
+    const longGame = isLongGame(court, now);
+
     return (
       <section
         key={court.courtNumber}
-        className="rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-xl"
+        className={`rounded-2xl border bg-slate-900 p-5 shadow-xl ${
+          longGame
+            ? "border-amber-400"
+            : "border-slate-700"
+        }`}
       >
         <div className="mb-5 flex items-center justify-between gap-3">
           <div>
@@ -1654,16 +1666,38 @@ const handleSaveAdminLineup =
             </h2>
           </div>
 
-          <span
-            className={`rounded-full px-3 py-1 text-xs font-bold ${
-              court.status === "completed"
-                ? "bg-emerald-500/20 text-emerald-300"
-                : "bg-cyan-500/20 text-cyan-300"
-            }`}
-          >
-            {court.status.toUpperCase()}
-          </span>
+          <div className="flex flex-col items-end gap-1">
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-bold ${
+                court.status === "completed"
+                  ? "bg-emerald-500/20 text-emerald-300"
+                  : "bg-cyan-500/20 text-cyan-300"
+              }`}
+            >
+              {court.status.toUpperCase()}
+            </span>
+
+            {court.status === "playing" && (
+              <span
+                className={`text-sm font-black tabular-nums ${
+                  longGame
+                    ? "text-amber-300"
+                    : "text-slate-400"
+                }`}
+              >
+                ⏱ {formatClock(
+                  getCourtElapsedMs(court, now)
+                )}
+              </span>
+            )}
+          </div>
         </div>
+
+        {longGame && (
+          <p className="-mt-2 mb-4 rounded-xl bg-amber-500/15 px-4 py-2 text-sm font-bold text-amber-200">
+            This game has run over {LONG_GAME_MINUTES} minutes. Check that the score was entered.
+          </p>
+        )}
 
 {isAdmin &&
   court.status === "playing" && (
@@ -3034,6 +3068,17 @@ const handleAddGuestPlayer =
   >
     MANAGE PLAYERS
   </button>
+)}
+
+{isAdmin && (
+  <a
+    href="?view=tv"
+    target="_blank"
+    rel="noreferrer"
+    className="mt-3 block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-center text-xs font-black uppercase tracking-wider text-slate-700 transition hover:bg-slate-100"
+  >
+    OPEN TV DISPLAY ↗
+  </a>
 )}
 
 {isAdmin && (
