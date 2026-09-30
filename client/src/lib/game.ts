@@ -25,6 +25,9 @@ import {
 } from "./mixer";
 
 import { applyScoreCorrection } from "./scoreCorrection";
+import { rankPlayerStats } from "./playerRanking";
+
+export { rankPlayerStats };
 
 // ======================================================
 // TYPES
@@ -2252,84 +2255,8 @@ export async function clearOpenPlay(): Promise<void> {
 export function getRankedPlayers(
   state: OpenPlayState
 ): PlayerStats[] {
-
-  return Object.values(
-    state.playerStats
-  ).sort(
-    (a, b) => {
-
-      /*
-       * 1. MOST WINS
-       */
-      if (
-        b.wins !==
-        a.wins
-      ) {
-
-        return (
-          b.wins -
-          a.wins
-        );
-
-      }
-
-      /*
-       * 2. WIN %
-       */
-      const winRateA =
-        a.gamesPlayed > 0
-          ? a.wins /
-            a.gamesPlayed
-          : 0;
-
-      const winRateB =
-        b.gamesPlayed > 0
-          ? b.wins /
-            b.gamesPlayed
-          : 0;
-
-      if (
-        winRateB !==
-        winRateA
-      ) {
-
-        return (
-          winRateB -
-          winRateA
-        );
-
-      }
-
-      /*
-       * 3. POINT DIFFERENTIAL
-       */
-      const diffA =
-        a.pointsFor -
-        a.pointsAgainst;
-
-      const diffB =
-        b.pointsFor -
-        b.pointsAgainst;
-
-      if (
-        diffB !==
-        diffA
-      ) {
-
-        return (
-          diffB -
-          diffA
-        );
-
-      }
-
-      /*
-       * 4. GAMES PLAYED
-       */
-      return (
-        b.gamesPlayed -
-        a.gamesPlayed
-      );
-    }
+  return rankPlayerStats(
+    Object.values(state.playerStats ?? {})
   );
 }
+

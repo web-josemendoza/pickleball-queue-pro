@@ -1,7 +1,13 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import type { OpenPlayState, PlayerStats } from "../lib/game";
 import { formatDurationMs } from "../lib/format";
+import {
+  describeRange,
+  periodRange,
+  statsForRange,
+  type StatsPeriod,
+} from "../lib/periodStats";
 
 type SessionStats = {
   totalGames: number;
@@ -14,6 +20,8 @@ type FinalResultsProps = {
   game: OpenPlayState;
   isAdmin: boolean;
   rankedPlayers: PlayerStats[];
+  // Saved sessions plus this one, for day/week totals.
+  allSessions: OpenPlayState[];
   sessionStats: SessionStats;
   clearingSession: boolean;
   onKeepPlayers: () => Promise<void>;
@@ -25,12 +33,41 @@ export default function FinalResults({
   game,
   isAdmin,
   rankedPlayers,
+  allSessions,
   sessionStats,
   clearingSession,
   onKeepPlayers,
   onClearPlayers,
 }: FinalResultsProps) {
   const [showNewSessionOptions, setShowNewSessionOptions] = useState(false);
+
+  const [period, setPeriod] = useState<StatsPeriod>("session");
+
+  // Day and week are those of this session's last game.
+  const referenceDate = useMemo(() => {
+    const lastGame = Math.max(
+      0,
+      ...(game.cycles ?? []).flatMap((cycle) =>
+        (cycle.courts ?? []).map((court) => court.completedAt ?? 0)
+      )
+    );
+
+    return new Date(lastGame || game.startedAt || 0);
+  }, [game.cycles, game.startedAt]);
+
+  const rows = useMemo(() => {
+    if (period === "session") {
+      return rankedPlayers;
+    }
+
+    const { from, to } = periodRange(period, referenceDate);
+    return statsForRange(allSessions, from, to);
+  }, [period, rankedPlayers, allSessions, referenceDate]);
+
+  const periodLabel =
+    period === "session"
+      ? "This session"
+      : `${period === "day" ? "Today" : "This week"} · ${describeRange(period, referenceDate)}`;
 
   return (
     <section className="rounded-2xl bg-slate-950 p-6 text-white shadow-xl">
@@ -167,9 +204,43 @@ export default function FinalResults({
             Player Stats
           </p>
 
-          <h3 className="text-xl font-black text-white">
-            Performance Breakdown
-          </h3>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h3 className="text-xl font-black text-white">
+                Performance Breakdown
+              </h3>
+              <p className="mt-1 text-sm text-slate-400">{periodLabel}</p>
+            </div>
+
+            <div
+              role="tablist"
+              aria-label="Stats period"
+              className="flex rounded-xl bg-slate-900 p-1"
+            >
+              {(
+                [
+                  ["session", "Session"],
+                  ["day", "Day"],
+                  ["week", "Week"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={period === value}
+                  onClick={() => setPeriod(value)}
+                  className={`rounded-lg px-4 py-2 text-xs font-black uppercase tracking-wider transition ${
+                    period === value
+                      ? "bg-cyan-500 text-slate-950"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="overflow-x-auto rounded-xl border border-slate-800">
@@ -187,7 +258,13 @@ export default function FinalResults({
               <span>+/-</span>
             </div>
 
-            {rankedPlayers.map((player, index) => {
+            {rows.length === 0 && (
+              <p className="border-t border-slate-800 px-4 py-6 text-center text-sm text-slate-400">
+                No games played in this period.
+              </p>
+            )}
+
+            {rows.map((player, index) => {
               const winRate =
                 player.gamesPlayed > 0
                   ? Math.round((player.wins / player.gamesPlayed) * 100)

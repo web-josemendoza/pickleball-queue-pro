@@ -1433,6 +1433,7 @@ const handleNewSessionClearPlayers = async () => {
                 game={game!}
                 isAdmin={isAdmin}
                 rankedPlayers={rankedPlayers}
+                allSessions={statsSessions}
                 sessionStats={sessionStats}
                 clearingSession={clearingSession}
                 onKeepPlayers={handleNewSessionKeepPlayers}
