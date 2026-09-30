@@ -3590,13 +3590,6 @@ const handleAddGuestPlayer =
         ? "You are registered in this session."
         : "You are not registered in this session."}
 </p>
-              <p className="mt-2 text-sm text-slate-600">
-                {isMyPlayerOnCourt
-                  ? "You are currently playing."
-                  : isMyPlayerRegistered
-                    ? "You are registered and waiting in the player queue."
-                    : "You are not registered in this session."}
-              </p>
 
               {isMyPlayerRegistered && myPlayerId && (
                 <button
