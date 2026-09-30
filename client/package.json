@@ -8,9 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run src",
+    "test": "vitest run src functions/src",
     "test:rules": "firebase emulators:exec --only database \"vitest run tests/rules\"",
-    "emulators": "firebase emulators:start --only auth,database",
+    "emulators": "npm --prefix functions run build && firebase emulators:start --only auth,database,functions",
     "dev:emulator": "vite --mode emulator"
   },
   "dependencies": {

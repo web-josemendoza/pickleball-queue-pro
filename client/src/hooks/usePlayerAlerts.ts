@@ -5,8 +5,32 @@ import {
   useState,
 } from "react";
 
+import {
+  disablePush,
+  enablePush,
+  type PushResult,
+} from "../lib/push";
+
 const STORAGE_KEY =
   "pickleballAlertsEnabled";
+
+const PUSH_KEY = "pickleballPushEnabled";
+
+function readPush(): boolean {
+  try {
+    return localStorage.getItem(PUSH_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function writePush(enabled: boolean) {
+  try {
+    localStorage.setItem(PUSH_KEY, String(enabled));
+  } catch {
+    // Push still works for this page load.
+  }
+}
 
 function readEnabled(): boolean {
   try {
@@ -108,10 +132,17 @@ export type PlayerAlert = {
  */
 export function usePlayerAlerts(
   playingCourtNumber: number | null,
-  isUpNext: boolean
+  isUpNext: boolean,
+  playerId: string | null
 ) {
   const [enabled, setEnabled] =
     useState(readEnabled);
+
+  // Push alerts reach the phone even when it is locked.
+  const [pushResult, setPushResult] =
+    useState<PushResult | null>(() =>
+      readPush() ? "enabled" : null
+    );
 
   const [activeAlert, setActiveAlert] =
     useState<PlayerAlert | null>(null);
@@ -135,7 +166,10 @@ export function usePlayerAlerts(
 
       playChime();
 
+      // With push on, the push itself is the system
+      // notification; showing one here would double up.
       if (
+        pushResult !== "enabled" &&
         document.hidden &&
         "Notification" in window &&
         Notification.permission ===
@@ -147,7 +181,7 @@ export function usePlayerAlerts(
         });
       }
     },
-    [enabled]
+    [enabled, pushResult]
   );
 
   useEffect(() => {
@@ -220,17 +254,39 @@ export function usePlayerAlerts(
 
       writeEnabled(true);
       setEnabled(true);
+
+      if (!playerId) {
+        return;
+      }
+
+      try {
+        const result = await enablePush(playerId);
+        writePush(result === "enabled");
+        setPushResult(result);
+      } catch (error) {
+        console.error("Unable to enable push alerts:", error);
+        setPushResult("unsupported");
+      }
     },
-    []
+    [playerId]
   );
 
   const disableAlerts = useCallback(() => {
     writeEnabled(false);
     setEnabled(false);
-  }, []);
+    writePush(false);
+    setPushResult(null);
+
+    if (playerId) {
+      void disablePush(playerId).catch((error) => {
+        console.error("Unable to disable push alerts:", error);
+      });
+    }
+  }, [playerId]);
 
   return {
     alertsEnabled: enabled,
+    pushResult,
     enableAlerts,
     disableAlerts,
     activeAlert,

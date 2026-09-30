@@ -1,3 +1,32 @@
+import {
+  isIosWithoutInstall,
+  type PushResult,
+} from "../lib/push";
+
+// Tells the player whether alerts will reach a locked
+// phone, and what to do if not.
+function pushAlertHint(
+  alertsEnabled: boolean,
+  pushResult: PushResult | null
+): string {
+  if (isIosWithoutInstall()) {
+    return "On iPhone, tap Share → Add to Home Screen and open the app from there to get alerts with the phone locked.";
+  }
+
+  if (!alertsEnabled) {
+    return "Turn this on to get alerts even with your phone locked.";
+  }
+
+  switch (pushResult) {
+    case "enabled":
+      return "Works with your phone locked.";
+    case "denied":
+      return "Notifications are blocked for this site. Allow them in your browser settings to get alerts with the phone locked.";
+    default:
+      return "Alerts work while this page is open.";
+  }
+}
+
 type PlayerStatusCardProps = {
   myPlayerId: string | null;
   myCourtNumber: number | null;
@@ -10,6 +39,7 @@ type PlayerStatusCardProps = {
   alertsEnabled: boolean;
   enableAlerts: () => Promise<void>;
   disableAlerts: () => void;
+  pushResult: PushResult | null;
   onToggleBreak: (playerId: string, onBreak: boolean) => Promise<void>;
   onShowStats: () => void;
 };
@@ -26,6 +56,7 @@ export default function PlayerStatusCard({
   alertsEnabled,
   enableAlerts,
   disableAlerts,
+  pushResult,
   onToggleBreak,
   onShowStats,
 }: PlayerStatusCardProps) {
@@ -83,6 +114,12 @@ export default function PlayerStatusCard({
             ? "🔔 Alerts on · tap to turn off"
             : "🔔 Alert me when I'm up"}
         </button>
+      )}
+
+      {isMyPlayerRegistered && (
+        <p className="mt-2 text-xs leading-5 text-slate-500">
+          {pushAlertHint(alertsEnabled, pushResult)}
+        </p>
       )}
 
       {myPlayerId && (

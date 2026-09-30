@@ -191,6 +191,45 @@ describe("players", () => {
   });
 });
 
+describe("push tokens", () => {
+  const token = { token: "device-token", createdAt: 1 };
+
+  it("lets players save and remove their own devices", async () => {
+    await assertSucceeds(
+      set(ref(player(), "pushTokens/p1/device1"), token)
+    );
+    await assertSucceeds(
+      get(ref(player(), "pushTokens/p1"))
+    );
+    await assertSucceeds(
+      remove(ref(player(), "pushTokens/p1/device1"))
+    );
+  });
+
+  it("keeps other players' devices private", async () => {
+    await assertFails(
+      set(ref(player(), "pushTokens/p2/device1"), token)
+    );
+    await assertFails(get(ref(player(), "pushTokens/p2")));
+    await assertFails(get(ref(admin(), "pushTokens/p1")));
+    await assertFails(get(ref(anon(), "pushTokens")));
+  });
+
+  it("rejects malformed entries", async () => {
+    await assertFails(
+      set(ref(player(), "pushTokens/p1/device1"), {
+        token: 42,
+        createdAt: 1,
+      })
+    );
+    await assertFails(
+      set(ref(player(), "pushTokens/p1/device1"), {
+        token: "no-date",
+      })
+    );
+  });
+});
+
 describe("admins", () => {
   it("can manage the queue", async () => {
     await assertSucceeds(

@@ -539,12 +539,14 @@ const {
   alertsEnabled,
   enableAlerts,
   disableAlerts,
+  pushResult,
   activeAlert,
   dismissAlert,
 } = usePlayerAlerts(
   myPlayingCourtNumber,
   myWaitingPosition !== null &&
-    myWaitingPosition <= upNextCount
+    myWaitingPosition <= upNextCount,
+  myPlayerId
 );
 
 const upNextPlayers = useMemo(() => {
@@ -1800,6 +1802,7 @@ const handleNewSessionClearPlayers = async () => {
               alertsEnabled={alertsEnabled}
               enableAlerts={enableAlerts}
               disableAlerts={disableAlerts}
+              pushResult={pushResult}
               onToggleBreak={handleToggleBreak}
               onShowStats={() => myPlayerId && setStatsPlayerId(myPlayerId)}
             />

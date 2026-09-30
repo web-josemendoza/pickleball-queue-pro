@@ -18,6 +18,16 @@
       }
     },
 
+    "pushTokens": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        "$tokenId": {
+          ".validate": "newData.hasChildren(['token', 'createdAt']) && newData.child('token').isString() && newData.child('token').val().length < 4096"
+        }
+      }
+    },
+
     "openPlay": {
       ".read": true,
       ".write": "auth != null && root.child('players').child(auth.uid).child('role').val() === 'admin'",

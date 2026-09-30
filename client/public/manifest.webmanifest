@@ -1,0 +1,14 @@
+{
+  "name": "Pickleball Queue Pro",
+  "short_name": "Pickleball",
+  "description": "Open-play queue: see who's on court and get alerted when you're up.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#020617",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
