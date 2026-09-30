@@ -12,6 +12,7 @@ import {
 import {
   correctMatchResult,
   deleteTournament,
+  finishAndClear,
 } from "../../lib/tournamentStore";
 import {
   matchLabel,
@@ -24,6 +25,8 @@ type TournamentLiveProps = {
   tournament: Tournament;
   userId: string | null;
   isAdmin: boolean;
+  // Past tournaments: no score entry, edits or delete.
+  readOnly?: boolean;
 };
 
 function MyMatch({
@@ -139,11 +142,13 @@ function CorrectScoreModal({
 export default function TournamentLive({
   tournament,
   userId,
-  isAdmin,
+  isAdmin: isAdminUser,
+  readOnly = false,
 }: TournamentLiveProps) {
+  const isAdmin = isAdminUser && !readOnly;
   const [editing, setEditing] = useState<TournamentMatch | null>(null);
 
-  const myTeam = teamOfPlayer(tournament, userId);
+  const myTeam = readOnly ? null : teamOfPlayer(tournament, userId);
   const all = matchList(tournament);
 
   const playing = all
@@ -157,6 +162,18 @@ export default function TournamentLive({
     .sort((a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0));
 
   const hasPlayoff = all.some((m) => m.stage === "playoff");
+
+  const handleStartNew = () => {
+    if (
+      window.confirm(
+        `Save ${tournament.name} to history and clear it so you can create a new tournament?`
+      )
+    ) {
+      void finishAndClear(tournament).catch((error) =>
+        alert(error instanceof Error ? error.message : String(error))
+      );
+    }
+  };
 
   const handleDelete = () => {
     if (
@@ -194,7 +211,7 @@ export default function TournamentLive({
                 key={m.id}
                 tournament={tournament}
                 match={m}
-                canReport={userId !== null}
+                canReport={userId !== null && !readOnly}
                 highlightTeamId={myTeam}
               />
             ))}
@@ -278,7 +295,17 @@ export default function TournamentLive({
         </section>
       )}
 
-      {isAdmin && (
+      {isAdmin && tournament.status === "finished" && (
+        <button
+          type="button"
+          onClick={handleStartNew}
+          className="w-full rounded-xl bg-emerald-500 px-5 py-4 text-lg font-black text-white hover:bg-emerald-400"
+        >
+          START A NEW TOURNAMENT
+        </button>
+      )}
+
+      {isAdmin && tournament.status !== "finished" && (
         <button
           type="button"
           onClick={handleDelete}

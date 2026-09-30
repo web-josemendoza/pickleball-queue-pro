@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import PlayerAuth from "../PlayerAuth";
+import TournamentHistory from "./TournamentHistory";
 import TournamentLive from "./TournamentLive";
 import TournamentSetup from "./TournamentSetup";
 import { useCurrentProfile } from "../../hooks/useCurrentProfile";
@@ -78,6 +79,7 @@ export default function TournamentApp() {
     undefined
   );
   const [showAuth, setShowAuth] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => subscribeToTournament(setTournament), []);
 
@@ -91,7 +93,14 @@ export default function TournamentApp() {
 
   let body;
 
-  if (tournament === undefined || !ready) {
+  if (showHistory) {
+    body = (
+      <TournamentHistory
+        isAdmin={isAdmin}
+        onBack={() => setShowHistory(false)}
+      />
+    );
+  } else if (tournament === undefined || !ready) {
     body = <p className="text-slate-500">Loading…</p>;
   } else if (!tournament) {
     body = isAdmin ? (
@@ -152,6 +161,14 @@ export default function TournamentApp() {
                 {STATUS_LABEL[tournament.status]}
               </span>
             )}
+
+            <button
+              type="button"
+              onClick={() => setShowHistory(true)}
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black hover:bg-slate-800"
+            >
+              HISTORY
+            </button>
 
             {tournament && tournament.status !== "setup" && (
               <a

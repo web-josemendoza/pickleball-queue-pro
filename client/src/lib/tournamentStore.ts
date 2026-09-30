@@ -25,9 +25,14 @@ import {
 } from "./tournament";
 
 const PATH = "tournament/current";
+const HISTORY_PATH = "tournament/history";
 
 function tournamentRef() {
   return ref(db, PATH);
+}
+
+export interface ArchivedTournament extends Tournament {
+  archivedAt: number;
 }
 
 // Firebase rejects undefined values.
@@ -50,7 +55,7 @@ export function subscribeToTournament(
  */
 async function update(
   change: (current: Tournament) => Tournament
-): Promise<void> {
+): Promise<Tournament | null> {
   let failure: string | null = null;
 
   const result = await runTransaction(tournamentRef(), (raw) => {
@@ -76,6 +81,75 @@ async function update(
       failure ?? "The tournament changed. Please try again."
     );
   }
+
+  return normalizeTournament(result.snapshot.val());
+}
+
+async function updateOnly(
+  change: (current: Tournament) => Tournament
+): Promise<void> {
+  await update(change);
+}
+
+// ------------------------------------------------------
+// HISTORY
+// ------------------------------------------------------
+
+/*
+ * Copies a finished tournament into history. Safe to repeat:
+ * a corrected final just overwrites the saved copy.
+ */
+export async function saveToHistory(t: Tournament): Promise<void> {
+  if (t.status !== "finished") {
+    throw new Error("Only finished tournaments go into history.");
+  }
+
+  const archived: ArchivedTournament = { ...t, archivedAt: Date.now() };
+  await set(ref(db, `${HISTORY_PATH}/${t.id}`), clean(archived));
+}
+
+// Saves once play is over; failures don't undo the result.
+async function saveIfFinished(t: Tournament | null) {
+  if (t?.status !== "finished") {
+    return;
+  }
+
+  try {
+    await saveToHistory(t);
+  } catch (error) {
+    console.error("Unable to save tournament to history:", error);
+  }
+}
+
+export function subscribeToTournamentHistory(
+  callback: (tournaments: ArchivedTournament[]) => void
+): () => void {
+  return onValue(ref(db, HISTORY_PATH), (snapshot) => {
+    const raw = (snapshot.val() ?? {}) as Record<string, ArchivedTournament>;
+
+    const list = Object.entries(raw)
+      .map(([id, value]) => {
+        const t = normalizeTournament({ ...value, id });
+        return t ? { ...t, archivedAt: value.archivedAt ?? t.createdAt } : null;
+      })
+      .filter((t): t is ArchivedTournament => t !== null)
+      .sort((a, b) => b.archivedAt - a.archivedAt);
+
+    callback(list);
+  });
+}
+
+export function deleteFromHistory(id: string): Promise<void> {
+  return remove(ref(db, `${HISTORY_PATH}/${id}`));
+}
+
+/*
+ * Clears a finished tournament so a new one can be created,
+ * saving it to history first.
+ */
+export async function finishAndClear(t: Tournament): Promise<void> {
+  await saveToHistory(t);
+  await remove(tournamentRef());
 }
 
 // ------------------------------------------------------
@@ -110,14 +184,14 @@ function requireSetup(t: Tournament) {
 export function updateSettings(
   settings: TournamentSettings
 ): Promise<void> {
-  return update((t) => {
+  return updateOnly((t) => {
     requireSetup(t);
     return { ...t, settings };
   });
 }
 
 export function renameTournament(name: string): Promise<void> {
-  return update((t) => ({ ...t, name: name.trim() || t.name }));
+  return updateOnly((t) => ({ ...t, name: name.trim() || t.name }));
 }
 
 // Adds a team at the bottom of the seeding.
@@ -125,7 +199,7 @@ export function addTeam(
   members: TournamentTeam["members"],
   name?: string
 ): Promise<void> {
-  return update((t) => {
+  return updateOnly((t) => {
     requireSetup(t);
 
     if (members.length !== 2 || members.some((m) => !m.name.trim())) {
@@ -168,7 +242,7 @@ export function addTeam(
 }
 
 export function removeTeam(teamId: string): Promise<void> {
-  return update((t) => {
+  return updateOnly((t) => {
     requireSetup(t);
     const teams = { ...t.teams };
     delete teams[teamId];
@@ -185,7 +259,7 @@ function reseed(ordered: TournamentTeam[]): Record<string, TournamentTeam> {
 
 // Sets the seeding to the given team order (1 = strongest).
 export function setSeedOrder(teamIds: string[]): Promise<void> {
-  return update((t) => {
+  return updateOnly((t) => {
     requireSetup(t);
     const ordered = teamIds
       .map((id) => t.teams[id])
@@ -200,7 +274,7 @@ export function setSeedOrder(teamIds: string[]): Promise<void> {
 }
 
 export function beginTournament(): Promise<void> {
-  return update((t) => {
+  return updateOnly((t) => {
     requireSetup(t);
     return startTournament(t, Date.now());
   });
@@ -214,18 +288,22 @@ export function deleteTournament(): Promise<void> {
 // MATCHES
 // ------------------------------------------------------
 
-export function reportMatchResult(
+export async function reportMatchResult(
   matchId: string,
   scoreA: number,
   scoreB: number
 ): Promise<void> {
-  return update((t) => recordResult(t, matchId, scoreA, scoreB, Date.now()));
+  await saveIfFinished(
+    await update((t) => recordResult(t, matchId, scoreA, scoreB, Date.now()))
+  );
 }
 
-export function correctMatchResult(
+export async function correctMatchResult(
   matchId: string,
   scoreA: number,
   scoreB: number
 ): Promise<void> {
-  return update((t) => correctResult(t, matchId, scoreA, scoreB));
+  await saveIfFinished(
+    await update((t) => correctResult(t, matchId, scoreA, scoreB))
+  );
 }

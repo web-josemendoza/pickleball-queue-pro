@@ -223,6 +223,52 @@ describe("tournament", () => {
   });
 });
 
+describe("tournament history", () => {
+  const finished = { id: "t1", name: "Club Open", status: "finished" };
+
+  async function setCurrent(value: object) {
+    await env.withSecurityRulesDisabled(async (context) => {
+      await set(ref(context.database(), "tournament/current"), value);
+    });
+  }
+
+  it("anyone can read it", async () => {
+    await assertSucceeds(get(ref(anon(), "tournament/history")));
+  });
+
+  it("a player can save the finished current tournament", async () => {
+    await setCurrent(finished);
+    await assertSucceeds(
+      set(ref(player(), "tournament/history/t1"), { ...finished, archivedAt: 1 })
+    );
+  });
+
+  it("a player can't save one still in progress, or a made-up one", async () => {
+    await setCurrent({ ...finished, status: "playoffs" });
+    await assertFails(
+      set(ref(player(), "tournament/history/t1"), { ...finished, archivedAt: 1 })
+    );
+
+    await setCurrent(finished);
+    await assertFails(
+      set(ref(player(), "tournament/history/fake"), { ...finished, id: "fake" })
+    );
+    await assertFails(
+      set(ref(anon(), "tournament/history/t1"), { ...finished, archivedAt: 1 })
+    );
+  });
+
+  it("only admins can delete history", async () => {
+    await setCurrent(finished);
+    await env.withSecurityRulesDisabled(async (context) => {
+      await set(ref(context.database(), "tournament/history/t1"), finished);
+    });
+
+    await assertFails(remove(ref(player(), "tournament/history/t1")));
+    await assertSucceeds(remove(ref(admin(), "tournament/history/t1")));
+  });
+});
+
 describe("push tokens", () => {
   const token = { token: "device-token", createdAt: 1 };
 

@@ -22,6 +22,11 @@
       ".read": true,
       "current": {
         ".write": "auth != null && ((data.exists() && newData.exists()) || root.child('players').child(auth.uid).child('role').val() === 'admin')"
+      },
+      "history": {
+        "$tournamentId": {
+          ".write": "auth != null && (root.child('players').child(auth.uid).child('role').val() === 'admin' || (newData.exists() && newData.child('id').val() === $tournamentId && root.child('tournament/current/id').val() === $tournamentId && root.child('tournament/current/status').val() === 'finished'))"
+        }
       }
     },
 
