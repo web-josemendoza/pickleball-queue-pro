@@ -119,6 +119,48 @@ function emptyMatch(
   };
 }
 
+// Firebase drops nulls and empty lists; restore them.
+export function normalizeTournament(raw: Partial<Tournament> | null): Tournament | null {
+  if (!raw) {
+    return null;
+  }
+
+  const matches: Record<string, TournamentMatch> = {};
+
+  for (const [id, m] of Object.entries(raw.matches ?? {})) {
+    matches[id] = {
+      ...m,
+      id,
+      teamA: m.teamA ?? null,
+      teamB: m.teamB ?? null,
+      court: m.court ?? null,
+      startedAt: m.startedAt ?? null,
+      completedAt: m.completedAt ?? null,
+      scoreA: m.scoreA ?? null,
+      scoreB: m.scoreB ?? null,
+      winner: m.winner ?? null,
+    };
+  }
+
+  const teams: Record<string, TournamentTeam> = {};
+
+  for (const [id, team] of Object.entries(raw.teams ?? {})) {
+    teams[id] = { ...team, id, members: team.members ?? [] };
+  }
+
+  return {
+    id: raw.id ?? "tournament",
+    name: raw.name ?? "Tournament",
+    status: raw.status ?? "setup",
+    settings: { ...DEFAULT_SETTINGS, ...(raw.settings ?? {}) },
+    teams,
+    pools: (raw.pools ?? []).map((pool) => pool ?? []),
+    matches,
+    championId: raw.championId ?? null,
+    createdAt: raw.createdAt ?? 0,
+  };
+}
+
 // ------------------------------------------------------
 // POOLS AND ROUND ROBIN
 // ------------------------------------------------------

@@ -18,6 +18,13 @@
       }
     },
 
+    "tournament": {
+      ".read": true,
+      "current": {
+        ".write": "auth != null && ((data.exists() && newData.exists()) || root.child('players').child(auth.uid).child('role').val() === 'admin')"
+      }
+    },
+
     "pushTokens": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",

@@ -191,6 +191,38 @@ describe("players", () => {
   });
 });
 
+describe("tournament", () => {
+  const tournament = { id: "t", name: "Club Open", status: "setup" };
+
+  it("anyone can watch it", async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      await set(ref(context.database(), "tournament/current"), tournament);
+    });
+
+    await assertSucceeds(get(ref(anon(), "tournament/current")));
+  });
+
+  it("only admins can create or delete it", async () => {
+    await assertFails(set(ref(player(), "tournament/current"), tournament));
+    await assertSucceeds(set(ref(admin(), "tournament/current"), tournament));
+    await assertFails(remove(ref(player(), "tournament/current")));
+    await assertSucceeds(remove(ref(admin(), "tournament/current")));
+  });
+
+  it("signed-in players can update a running one (report scores)", async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      await set(ref(context.database(), "tournament/current"), tournament);
+    });
+
+    await assertSucceeds(
+      update(ref(player(), "tournament/current"), { status: "pools" })
+    );
+    await assertFails(
+      update(ref(anon(), "tournament/current"), { status: "pools" })
+    );
+  });
+});
+
 describe("push tokens", () => {
   const token = { token: "device-token", createdAt: 1 };
 

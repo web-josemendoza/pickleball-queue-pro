@@ -7,6 +7,7 @@ import {
   makePlayoffMatches,
   makePools,
   matchList,
+  normalizeTournament,
   poolStandings,
   readyMatches,
   recordResult,
@@ -314,6 +315,44 @@ describe("full tournaments", () => {
     const inPlayoff = firstRound.flatMap((m) => [m.teamA, m.teamB]);
 
     expect(inPlayoff).toContain("t16");
+  });
+});
+
+describe("saving to Firebase", () => {
+  // Firebase drops null fields and empty lists on save.
+  function firebaseRoundTrip(t: Tournament): unknown {
+    const strip = (value: unknown): unknown => {
+      if (Array.isArray(value)) {
+        const items = value.map(strip);
+        return items.length === 0 ? undefined : items;
+      }
+
+      if (value && typeof value === "object") {
+        const entries = Object.entries(value)
+          .map(([k, v]) => [k, strip(v)] as const)
+          .filter(([, v]) => v !== null && v !== undefined);
+        return entries.length === 0 ? undefined : Object.fromEntries(entries);
+      }
+
+      return value;
+    };
+
+    return strip(JSON.parse(JSON.stringify(t)));
+  }
+
+  it("keeps working after a save and reload mid-tournament", () => {
+    let t = startTournament(makeTournament(8, { courtCount: 2 }), 0);
+    let clock = 0;
+
+    while (t.status !== "finished") {
+      // Every step goes through a save/load like the app.
+      t = normalizeTournament(firebaseRoundTrip(t) as Tournament)!;
+      const m = matchList(t).find((x) => x.status === "playing")!;
+      t = recordResult(t, m.id, 11, 6, ++clock);
+    }
+
+    expect(t.championId).not.toBeNull();
+    expect(normalizeTournament(null)).toBeNull();
   });
 });
 
