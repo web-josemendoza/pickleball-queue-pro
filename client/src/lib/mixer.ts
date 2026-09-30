@@ -785,14 +785,10 @@ function chooseFairCourtPlayers(
   [...pool].sort(
     (a, b) => {
       const gamesA =
-        state.playerStats[
-          a.id
-        ]?.gamesPlayed ?? 0;
+        fairnessGames(state, a.id);
 
       const gamesB =
-        state.playerStats[
-          b.id
-        ]?.gamesPlayed ?? 0;
+        fairnessGames(state, b.id);
 
       const queueA =
         queuePosition.get(a.id) ??
@@ -922,9 +918,7 @@ function chooseFairCourtPlayers(
     Math.min(
       ...pool.map(
         (player) =>
-          state.playerStats[
-            player.id
-          ]?.gamesPlayed ?? 0
+          fairnessGames(state, player.id)
       )
     );
 
@@ -948,9 +942,7 @@ function chooseFairCourtPlayers(
   combination.reduce(
     (total, player) => {
       const games =
-        state.playerStats[
-          player.id
-        ]?.gamesPlayed ?? 0;
+        fairnessGames(state, player.id);
 
       const gamesBehind =
         games - minimumGames;
@@ -1053,6 +1045,59 @@ function chooseFairCourtPlayers(
 
   return bestCourt;
 }
+// ------------------------------------------------------
+// CATCH-UP CREDIT (BREAKS AND LATE ARRIVALS)
+// ------------------------------------------------------
+
+/*
+ * Games counted when choosing who plays next: real games
+ * plus any credit for games missed on a break or before
+ * arriving. Without the credit, "fewest games first" would
+ * put a returning player on court game after game until
+ * they caught up. Stats and rankings use real games only.
+ */
+export function fairnessGames(
+  state: OpenPlayState,
+  playerId: string
+): number {
+  return (
+    (state.playerStats?.[playerId]?.gamesPlayed ?? 0) +
+    (state.gamesCredit?.[playerId] ?? 0)
+  );
+}
+
+/*
+ * Credit that brings a player level with the least-played
+ * active player (ignoring anyone on a break), so they rejoin
+ * the normal rotation instead of catching up. Never lowers
+ * credit already given.
+ */
+export function catchUpCredit(
+  state: OpenPlayState,
+  playerId: string
+): number {
+  const onBreak = new Set(state.onBreakIds ?? []);
+
+  const others = (state.players ?? []).filter(
+    (player) =>
+      player.id !== playerId && !onBreak.has(player.id)
+  );
+
+  const current = state.gamesCredit?.[playerId] ?? 0;
+
+  if (others.length === 0) {
+    return current;
+  }
+
+  const target = Math.min(
+    ...others.map((player) => fairnessGames(state, player.id))
+  );
+
+  const real = state.playerStats?.[playerId]?.gamesPlayed ?? 0;
+
+  return Math.max(current, target - real);
+}
+
 // ------------------------------------------------------
 // PLAN THE NEXT GAME ON A FINISHED COURT
 // ------------------------------------------------------

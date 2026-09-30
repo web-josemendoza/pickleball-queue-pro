@@ -17,6 +17,7 @@ import {
 
 import {
   buildMixRules,
+  catchUpCredit,
   chooseBestTeamPairing,
   createPairedInitialCycle,
   pairKey,
@@ -140,6 +141,14 @@ export interface OpenPlayState {
   // Players who should never be teammates
   // (they can still be opponents).
   keepApartPairs?: FixedPair[];
+
+  /*
+   * Games credited for fairness only (never stats) to
+   * players who were on a break or arrived late, so they
+   * rejoin the rotation instead of catching up game after
+   * game. See catchUpCredit in mixer.ts.
+   */
+  gamesCredit?: Record<string, number>;
 }
 
 export interface ArchivedOpenPlaySession
@@ -907,6 +916,7 @@ export function subscribeToOpenPlay(
         onBreakIds: raw.onBreakIds ?? [],
         skillBalance: raw.skillBalance ?? false,
         keepApartPairs: raw.keepApartPairs ?? [],
+        gamesCredit: raw.gamesCredit ?? {},
       } as OpenPlayState;
 
       callback(normalizedState);
@@ -1630,6 +1640,13 @@ export async function addGuestPlayerToSession(
         pointsAgainst: 0,
       };
 
+      // A late arrival joins the normal rotation rather
+      // than playing every game until level with others.
+      state.gamesCredit = {
+        ...(state.gamesCredit ?? {}),
+        [guestId]: catchUpCredit(state, guestId),
+      };
+
       state.playerCount =
         state.players.length;
 
@@ -1839,6 +1856,14 @@ export async function linkGuestPlayerToAccount(
           pointsFor: 0,
           pointsAgainst: 0,
         };
+      }
+
+      if (state.gamesCredit?.[guestPlayerId] !== undefined) {
+        state.gamesCredit = {
+          ...state.gamesCredit,
+          [accountPlayer.id]: state.gamesCredit[guestPlayerId],
+        };
+        delete state.gamesCredit[guestPlayerId];
       }
 
       state.playerCount =
@@ -2078,6 +2103,14 @@ export async function setPlayerBreak(
       state.onBreakIds = onBreak
         ? [...others, playerId]
         : others;
+
+      // Coming back: forgive the games missed on the break.
+      if (!onBreak) {
+        state.gamesCredit = {
+          ...(state.gamesCredit ?? {}),
+          [playerId]: catchUpCredit(state, playerId),
+        };
+      }
 
       failureMessage = null;
       return state;

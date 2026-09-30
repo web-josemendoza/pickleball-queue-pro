@@ -7,6 +7,7 @@ import type {
 } from "./game";
 import {
   buildMixRules,
+  catchUpCredit,
   chooseBestTeamPairing,
   createPairedInitialCycle,
   planNextCourt,
@@ -565,6 +566,139 @@ describe("breaks", () => {
     } as unknown as OpenPlayState;
 
     expect(planNextCourt(state, completed)).toBeNull();
+  });
+});
+
+describe("returning from a break", () => {
+  /*
+   * 13 players, 2 courts: nobody normally has to play two
+   * games in a row. p12 sits out 12 games, then returns
+   * the way setPlayerBreak does it.
+   */
+  function playWithBreak(applyCredit: boolean) {
+    const players = makePlayers(13);
+    const first = createPairedInitialCycle(players, 2, []);
+
+    const state = {
+      players,
+      waitingPlayers: first.waitingPlayers,
+      courts: first.courts.map((court) =>
+        playingCourt(court.courtNumber, court.players, 0)
+      ),
+      cycles: [],
+      playerStats: Object.fromEntries(
+        players.map((player) => [
+          player.id,
+          { gamesPlayed: 0 },
+        ])
+      ),
+      onBreakIds: ["p12"],
+      gamesCredit: {},
+    } as unknown as OpenPlayState;
+
+    // The p12 lineup history after returning.
+    const backToBack: number[] = [];
+
+    for (let game = 0; game < 48; game++) {
+      if (game === 12) {
+        state.onBreakIds = [];
+
+        if (applyCredit) {
+          state.gamesCredit = {
+            p12: catchUpCredit(state, "p12"),
+          };
+        }
+      }
+
+      const courtIndex = game % 2;
+      const court = state.courts[courtIndex];
+      const ids = court.players.map((player) => player.id);
+
+      const completed: CourtState = {
+        ...court,
+        status: "completed",
+        scoreA: 11,
+        scoreB: 7,
+        winnerIds: ids.slice(0, 2),
+        loserIds: ids.slice(2, 4),
+      };
+
+      state.courts[courtIndex] = completed;
+      state.cycles.push({
+        cycleNumber: game + 1,
+        startedAt: 0,
+        completedAt: 0,
+        courts: [completed],
+      });
+
+      for (const id of ids) {
+        state.playerStats[id].gamesPlayed += 1;
+      }
+
+      const plan = planNextCourt(state, completed)!;
+      const next = plan.players.map((player) => player.id);
+
+      if (ids.includes("p12") && next.includes("p12")) {
+        backToBack.push(game);
+      }
+
+      state.courts[courtIndex] = playingCourt(
+        court.courtNumber,
+        plan.players,
+        0
+      );
+      state.waitingPlayers = plan.waitingPlayers;
+    }
+
+    const games = (id: string) =>
+      state.playerStats[id].gamesPlayed;
+
+    const played12 = games("p12");
+    const others = players
+      .filter((player) => player.id !== "p12")
+      .map((player) => games(player.id));
+
+    return { backToBack, played12, others };
+  }
+
+  it("rejoins the rotation instead of playing game after game", () => {
+    const { backToBack } = playWithBreak(true);
+
+    expect(backToBack).toEqual([]);
+  });
+
+  it("does not play more than everyone else after returning", () => {
+    const { played12, others } = playWithBreak(true);
+
+    // Missed games are forgiven, not made up.
+    expect(played12).toBeLessThanOrEqual(
+      Math.min(...others)
+    );
+  });
+
+  it("without the credit, the returning player would catch up back to back", () => {
+    // Guards the test itself: this is the old behaviour.
+    expect(playWithBreak(false).backToBack.length).toBeGreaterThan(0);
+  });
+
+  it("credits up to the least-played active player, never lowering it", () => {
+    const state = {
+      players: makePlayers(4),
+      playerStats: {
+        p0: { gamesPlayed: 1 },
+        p1: { gamesPlayed: 5 },
+        p2: { gamesPlayed: 6 },
+        p3: { gamesPlayed: 2 },
+      },
+      // p3 is on a break, so p1 (5) is the least-played.
+      onBreakIds: ["p3"],
+      gamesCredit: { p0: 1 },
+    } as unknown as OpenPlayState;
+
+    expect(catchUpCredit(state, "p0")).toBe(4);
+
+    state.gamesCredit = { p0: 9 };
+    expect(catchUpCredit(state, "p0")).toBe(9);
   });
 });
 
