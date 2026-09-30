@@ -23,6 +23,8 @@ import {
   planNextCourt,
 } from "./mixer";
 
+import { applyScoreCorrection } from "./scoreCorrection";
+
 // ======================================================
 // TYPES
 // ======================================================
@@ -1956,6 +1958,58 @@ export async function removePlayerFromSession(
     throw new Error(
       failureMessage ??
       "Unable to remove player because the session changed."
+    );
+  }
+}
+
+// ======================================================
+// ADMIN - CORRECT A FINISHED GAME'S SCORE
+// ======================================================
+
+export async function correctGameScore(
+  courtNumber: number,
+  startedAt: number | null,
+  scoreA: number,
+  scoreB: number
+): Promise<void> {
+  let failureMessage: string | null = null;
+
+  const result = await runTransaction(
+    gameRef(),
+    (current) => {
+      const state =
+        current as OpenPlayState | null;
+
+      if (!state || state.status === "setup") {
+        failureMessage =
+          "No open play session found.";
+        return;
+      }
+
+      try {
+        failureMessage = null;
+
+        return applyScoreCorrection(
+          state,
+          courtNumber,
+          startedAt,
+          scoreA,
+          scoreB
+        );
+      } catch (error) {
+        failureMessage =
+          error instanceof Error
+            ? error.message
+            : "Unable to correct the score.";
+        return;
+      }
+    }
+  );
+
+  if (!result.committed) {
+    throw new Error(
+      failureMessage ??
+      "Unable to correct the score because the session changed."
     );
   }
 }

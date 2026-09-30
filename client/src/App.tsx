@@ -1,6 +1,14 @@
 import PlayerAuth from "./components/PlayerAuth";
 import PairRulesEditor from "./components/PairRulesEditor";
 import PlayerStatsModal from "./components/PlayerStatsModal";
+import CompletedGames, {
+  type CompletedGame,
+} from "./components/CompletedGames";
+import EditScoreModal from "./components/EditScoreModal";
+import {
+  formatGameDuration,
+  formatTime,
+} from "./lib/format";
 import { usePlayerAlerts } from "./hooks/usePlayerAlerts";
 import {
   formatClock,
@@ -48,6 +56,7 @@ import {
   archiveOpenPlaySession,
   clearOpenPlay,
   deleteArchivedSession,
+  correctGameScore,
   finishCourtGame,
   finishOpenPlay,
   getRankedPlayers,
@@ -85,52 +94,7 @@ type ScoreInput = {
 
 type ScoreInputs = Record<number, ScoreInput>;
 
-function formatTime(timestamp: number | null) {
-  if (!timestamp) return "--";
 
-  return new Date(timestamp).toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function formatGameDuration(
-  startedAt: number | null,
-  completedAt: number | null
-) {
-  if (!startedAt || !completedAt) {
-    return "--";
-  }
-
-  const totalSeconds = Math.max(
-    0,
-    Math.floor(
-      (completedAt - startedAt) / 1000
-    )
-  );
-
-  const minutes = Math.floor(
-    totalSeconds / 60
-  );
-
-  const seconds =
-    totalSeconds % 60;
-
-  if (minutes >= 60) {
-    const hours = Math.floor(
-      minutes / 60
-    );
-
-    const remainingMinutes =
-      minutes % 60;
-
-    return `${hours}h ${remainingMinutes}m`;
-  }
-
-  return `${minutes}m ${String(
-    seconds
-  ).padStart(2, "0")}s`;
-}
 
 function formatDurationMs(
   milliseconds: number
@@ -309,8 +273,8 @@ const [setupCourtCount, setSetupCourtCount] =
 const [setupDurationHours, setSetupDurationHours] =
   useState("1");
 
-  const [showAllResults, setShowAllResults] =
-  useState(false);
+  const [editingResult, setEditingResult] =
+    useState<CompletedGame | null>(null);
   const [scores, setScores] = useState<ScoreInputs>({});
   const [finishingCourt, setFinishingCourt] = useState<number | null>(null);
   const [startingOpenPlay, setStartingOpenPlay] = useState(false);
@@ -886,6 +850,22 @@ const orderedPlayerPool = useMemo(() => {
     />
   );
 
+  const editScoreModal = isAdmin && editingResult && (
+    <EditScoreModal
+      key={`${editingResult.courtNumber}-${editingResult.startedAt}`}
+      game={editingResult}
+      onSave={(scoreA, scoreB) =>
+        correctGameScore(
+          editingResult.courtNumber,
+          editingResult.startedAt,
+          scoreA,
+          scoreB
+        )
+      }
+      onClose={() => setEditingResult(null)}
+    />
+  );
+
   const recentResults = useMemo(() => {
   if (!game) return [];
 
@@ -916,11 +896,7 @@ const orderedPlayerPool = useMemo(() => {
     );
 }, [game]);
 
-const visibleRecentResults = useMemo(() => {
-  return showAllResults
-    ? recentResults
-    : recentResults.slice(0, 6);
-}, [recentResults, showAllResults]);
+
 
 const sessionStats = useMemo(() => {
   if (recentResults.length === 0) {
@@ -2733,146 +2709,17 @@ const handleAddGuestPlayer =
             )}
 
             <div className="mt-6">
-          
-              
-  <div className="mb-4">
-    <p className="text-xs font-black uppercase tracking-widest text-cyan-400">
-      Recent Results
-    </p>
-
-    <h3 className="text-xl font-black">
-      Completed Games
-    </h3>
-  </div>
-
-  {recentResults.length === 0 ? (
-    <div className="rounded-xl bg-slate-900 p-4 text-sm text-slate-400">
-      No completed games yet.
-    </div>
-  ) : (
-    <>
-      <div className="grid gap-3 lg:grid-cols-2">
-        {visibleRecentResults.map((result, index) => {
-          const teamA = result.players.slice(0, 2);
-          const teamB = result.players.slice(2, 4);
-
-          const teamAWon =
-            result.scoreA > result.scoreB;
-
-          const teamBWon =
-            result.scoreB > result.scoreA;
-
-          return (
-            <div
-              key={`${result.cycleNumber}-${result.courtNumber}-${result.completedAt ?? index}`}
-              className="rounded-xl border border-slate-800 bg-slate-900 p-4"
-            >
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-widest text-cyan-400">
-                  Cycle {result.cycleNumber} • Court{" "}
-                  {result.courtNumber}
-                </span>
-
-                {result.completedAt && (
-                  <div className="text-right">
-  {result.completedAt && (
-    <p className="text-[10px] font-bold text-slate-500">
-      {formatTime(
-        result.completedAt
-      )}
-    </p>
-  )}
-
-  <p className="mt-0.5 text-[10px] font-black text-cyan-500">
-    {formatGameDuration(
-      result.startedAt,
-      result.completedAt
-    )}
-  </p>
-</div>
-                )}
-              </div>
-
-              <div
-                className={`flex items-center justify-between rounded-lg px-3 py-2 ${
-                  teamAWon
-                    ? "bg-emerald-500/15"
-                    : "bg-slate-800"
-                }`}
-              >
-                <span
-                  className={`truncate text-sm font-black ${
-                    teamAWon
-                      ? "text-emerald-300"
-                      : "text-white"
-                  }`}
-                >
-                  {teamAWon && "🏆 "}
-                  {teamA
-                    .map((player) => player.name)
-                    .join(" + ")}
-                </span>
-
-                <span className="ml-3 text-xl font-black">
-                  {result.scoreA}
-                </span>
-              </div>
-
-              <div className="py-1 text-center text-[9px] font-black text-slate-600">
-                VS
-              </div>
-
-              <div
-                className={`flex items-center justify-between rounded-lg px-3 py-2 ${
-                  teamBWon
-                    ? "bg-emerald-500/15"
-                    : "bg-slate-800"
-                }`}
-              >
-                <span
-                  className={`truncate text-sm font-black ${
-                    teamBWon
-                      ? "text-emerald-300"
-                      : "text-white"
-                  }`}
-                >
-                  {teamBWon && "🏆 "}
-                  {teamB
-                    .map((player) => player.name)
-                    .join(" + ")}
-                </span>
-
-                <span className="ml-3 text-xl font-black">
-                  {result.scoreB}
-                </span>
-              </div>
+              <CompletedGames
+                results={recentResults}
+                onEdit={isAdmin ? setEditingResult : undefined}
+              />
             </div>
-          );
-        })}
-      </div>
-
-      {recentResults.length > 6 && (
-        <button
-          type="button"
-          onClick={() =>
-            setShowAllResults(
-              (current) => !current
-            )
-          }
-          className="mt-4 w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-black text-white transition hover:bg-slate-800"
-        >
-          {showAllResults
-            ? "SHOW LESS"
-            : `SHOW ALL RESULTS (${recentResults.length})`}
-        </button>
-      )}
-    </>
-  )}
-</div>
           </section>
         </main>
 
         {statsModal}
+
+      {editScoreModal}
       </div>
     );
   }
@@ -2885,6 +2732,8 @@ const handleAddGuestPlayer =
     <div className="min-h-screen bg-slate-100 text-slate-950">
 
       {statsModal}
+
+        {editScoreModal}
 
       {showAuth && !playerProfile && (
         <div className="fixed inset-0 z-[125] flex items-center justify-center bg-slate-950/80 p-4">
@@ -3179,6 +3028,11 @@ const handleAddGuestPlayer =
 
             </section>
             )}
+
+            <CompletedGames
+              results={recentResults}
+              onEdit={isAdmin ? setEditingResult : undefined}
+            />
 
           </section>
 
