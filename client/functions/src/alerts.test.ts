@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { findAlerts, type SessionSnapshot } from "./alerts";
+import {
+  findAlerts,
+  findTournamentAlerts,
+  type SessionSnapshot,
+  type TournamentSnapshot,
+} from "./alerts";
 
 const p = (id: string) => ({ id, name: id.toUpperCase() });
 
@@ -24,6 +29,44 @@ function session(
 
 const summary = (before: SessionSnapshot, after: SessionSnapshot) =>
   findAlerts(before, after).map((a) => `${a.playerId}:${a.kind}`).sort();
+
+describe("findTournamentAlerts", () => {
+  const teams = {
+    t1: { name: "Ben & Dan", members: [{ name: "Ben", playerId: "ben" }, { name: "Dan", playerId: "dan" }] },
+    t2: { name: "Cara & Kim", members: [{ name: "Cara", playerId: "cara" }, { name: "Kim" }] },
+  };
+
+  it("alerts registered players on both teams when a match is called", () => {
+    const before: TournamentSnapshot = {
+      teams,
+      matches: { m1: { stage: "pool", pool: 1, status: "waiting", teamA: "t1", teamB: "t2" } },
+    };
+    const after: TournamentSnapshot = {
+      teams,
+      matches: { m1: { stage: "pool", pool: 1, status: "playing", court: 3, teamA: "t1", teamB: "t2" } },
+    };
+
+    const alerts = findTournamentAlerts(before, after);
+
+    // Kim is a guest: no account, no alert.
+    expect(alerts.map((a) => a.playerId).sort()).toEqual(["ben", "cara", "dan"]);
+    expect(alerts[0].title).toBe("Your match is on Court 3!");
+    expect(alerts.find((a) => a.playerId === "ben")!.body).toContain("Pool B vs Cara & Kim");
+  });
+
+  it("names the final and doesn't repeat alerts for a match already on court", () => {
+    const playing: TournamentSnapshot = {
+      teams,
+      matches: {
+        s1: { stage: "playoff", round: 1, status: "done", teamA: "t1", teamB: "t2" },
+        f: { stage: "playoff", round: 2, status: "playing", court: 1, teamA: "t1", teamB: "t2" },
+      },
+    };
+
+    expect(findTournamentAlerts(null, playing)[0].body).toContain("Final vs");
+    expect(findTournamentAlerts(playing, playing)).toEqual([]);
+  });
+});
 
 describe("findAlerts", () => {
   it("alerts players when a new game puts them on a court", () => {

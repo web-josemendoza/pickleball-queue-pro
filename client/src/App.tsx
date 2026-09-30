@@ -1369,9 +1369,17 @@ const handleNewSessionClearPlayers = async () => {
                   4-On / 4-Off Open Play
                 </h1>
               </div>
-              <span className="rounded-full bg-cyan-500/10 px-4 py-2 text-sm font-bold text-cyan-300">
-                {game?.status === "finished" ? "SESSION FINISHED" : "SETUP"}
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <a
+                  href="?view=tournament"
+                  className="rounded-full bg-amber-400/15 px-4 py-2 text-sm font-bold text-amber-300 hover:bg-amber-400/25"
+                >
+                  🏆 Tournament
+                </a>
+                <span className="rounded-full bg-cyan-500/10 px-4 py-2 text-sm font-bold text-cyan-300">
+                  {game?.status === "finished" ? "SESSION FINISHED" : "SETUP"}
+                </span>
+              </div>
             </div>
           </div>
         </header>
@@ -1552,6 +1560,13 @@ const handleNewSessionClearPlayers = async () => {
             </div>
 
             <div className="flex flex-wrap gap-2">
+
+              <a
+                href="?view=tournament"
+                className="flex items-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-black text-amber-300 hover:bg-slate-800"
+              >
+                🏆 Tournament
+              </a>
 
               {/* ACCOUNT */}
               {playerProfile ? (

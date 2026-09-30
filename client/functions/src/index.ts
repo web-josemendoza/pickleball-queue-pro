@@ -4,7 +4,13 @@ import { getMessaging } from "firebase-admin/messaging";
 import { onValueWritten } from "firebase-functions/v2/database";
 import * as logger from "firebase-functions/logger";
 
-import { findAlerts, type PlayerAlert, type SessionSnapshot } from "./alerts.js";
+import {
+  findAlerts,
+  findTournamentAlerts,
+  type PlayerAlert,
+  type SessionSnapshot,
+  type TournamentSnapshot,
+} from "./alerts.js";
 
 initializeApp();
 
@@ -106,6 +112,43 @@ export const notifyPlayers = onValueWritten(
     results.forEach((result, index) => {
       if (result.status === "rejected") {
         logger.error("alert failed", {
+          playerId: alerts[index].playerId,
+          error: String(result.reason),
+        });
+      }
+    });
+  }
+);
+
+/*
+ * When a tournament match is called to a court, tell the
+ * registered players on both teams.
+ */
+export const notifyTournamentPlayers = onValueWritten(
+  {
+    ref: "/tournament/current",
+    instance: "pickleball-queue-pro-default-rtdb",
+    region: isEmulator ? "us-central1" : "asia-southeast1",
+  },
+  async (event) => {
+    const alerts = findTournamentAlerts(
+      event.data.before.val() as TournamentSnapshot,
+      event.data.after.val() as TournamentSnapshot
+    );
+
+    if (alerts.length === 0) {
+      return;
+    }
+
+    const root = event.data.after.ref.root;
+
+    const results = await Promise.allSettled(
+      alerts.map((alert) => sendAlert(root, alert))
+    );
+
+    results.forEach((result, index) => {
+      if (result.status === "rejected") {
+        logger.error("tournament alert failed", {
           playerId: alerts[index].playerId,
           error: String(result.reason),
         });

@@ -75,6 +75,93 @@ function positions(
   return result;
 }
 
+// ------------------------------------------------------
+// TOURNAMENT
+// ------------------------------------------------------
+
+type TournamentMatchSnapshot = {
+  stage?: string;
+  pool?: number;
+  round?: number;
+  status?: string;
+  court?: number;
+  teamA?: string;
+  teamB?: string;
+};
+
+export type TournamentSnapshot = {
+  teams?: Record<
+    string,
+    { name?: string; members?: { name?: string; playerId?: string }[] }
+  >;
+  matches?: Record<string, TournamentMatchSnapshot>;
+} | null;
+
+function tournamentMatchLabel(
+  match: TournamentMatchSnapshot,
+  matches: TournamentMatchSnapshot[]
+): string {
+  if (match.stage === "pool") {
+    return `Pool ${String.fromCharCode(65 + (match.pool ?? 0))}`;
+  }
+
+  const lastRound = Math.max(
+    ...matches.filter((m) => m.stage === "playoff").map((m) => m.round ?? 0)
+  );
+  const fromEnd = lastRound - (match.round ?? 0);
+
+  return fromEnd === 0 ? "Final" : fromEnd === 1 ? "Semifinal" : fromEnd === 2 ? "Quarterfinal" : "Playoff";
+}
+
+/*
+ * When a tournament match is called to a court, alert the
+ * registered players on both teams. Guests have no account
+ * to send to.
+ */
+export function findTournamentAlerts(
+  before: TournamentSnapshot,
+  after: TournamentSnapshot
+): PlayerAlert[] {
+  const teams = after?.teams ?? {};
+  const afterMatches = after?.matches ?? {};
+  const all = Object.values(afterMatches);
+  const alerts: PlayerAlert[] = [];
+
+  for (const [id, match] of Object.entries(afterMatches)) {
+    const previous = before?.matches?.[id];
+
+    if (match.status !== "playing" || previous?.status === "playing") {
+      continue;
+    }
+
+    const nameOf = (teamId?: string) =>
+      (teamId && teams[teamId]?.name) || "TBD";
+    const label = tournamentMatchLabel(match, all);
+
+    for (const [mine, theirs] of [
+      [match.teamA, match.teamB],
+      [match.teamB, match.teamA],
+    ]) {
+      for (const member of (mine ? teams[mine]?.members : undefined) ?? []) {
+        if (member.playerId) {
+          alerts.push({
+            playerId: member.playerId,
+            kind: "court",
+            title: `Your match is on Court ${match.court}!`,
+            body: `${label} vs ${nameOf(theirs)}. Head to your court now.`,
+          });
+        }
+      }
+    }
+  }
+
+  return alerts;
+}
+
+// ------------------------------------------------------
+// OPEN PLAY
+// ------------------------------------------------------
+
 export function findAlerts(
   before: SessionSnapshot,
   after: SessionSnapshot

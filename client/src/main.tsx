@@ -5,17 +5,35 @@ import App from "./App";
 import ConnectionBanner from "./components/ConnectionBanner";
 
 // The player app loads directly (no extra round trip on
-// phones); the single venue TV loads its screen on demand.
+// phones); other screens load their code on demand.
 // The entry file is never hot-reloaded, so this rule
 // doesn't apply here.
-// eslint-disable-next-line react-refresh/only-export-components
+/* eslint-disable react-refresh/only-export-components */
 const TvDisplay = lazy(() => import("./components/TvDisplay"));
+const TournamentApp = lazy(
+  () => import("./components/tournament/TournamentApp")
+);
+const TournamentTv = lazy(
+  () => import("./components/tournament/TournamentTv")
+);
+/* eslint-enable react-refresh/only-export-components */
 
-// ?view=tv shows the read-only venue display.
-const isTvView =
-  new URLSearchParams(window.location.search).get(
-    "view"
-  ) === "tv";
+// ?view=tv                 open-play venue display
+// ?view=tournament         tournament mode
+// ?view=tournament-tv      tournament venue display
+const view = new URLSearchParams(window.location.search).get("view");
+const isTvView = view === "tv" || view === "tournament-tv";
+
+const screen =
+  view === "tv" ? (
+    <TvDisplay />
+  ) : view === "tournament" ? (
+    <TournamentApp />
+  ) : view === "tournament-tv" ? (
+    <TournamentTv />
+  ) : (
+    <App />
+  );
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -29,7 +47,7 @@ createRoot(document.getElementById("root")!).render(
         />
       }
     >
-      {isTvView ? <TvDisplay /> : <App />}
+      {screen}
     </Suspense>
   </StrictMode>
 );
