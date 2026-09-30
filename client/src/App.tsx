@@ -1,5 +1,4 @@
 import PlayerAuth from "./components/PlayerAuth";
-import PairRulesEditor from "./components/PairRulesEditor";
 import PlayerStatsModal from "./components/PlayerStatsModal";
 import CompletedGames, {
   type CompletedGame,
@@ -12,8 +11,10 @@ import CourtCard from "./components/CourtCard";
 import LiveRanking from "./components/LiveRanking";
 import PlayerStatusCard from "./components/PlayerStatusCard";
 import PlayerQueuePanel from "./components/PlayerQueuePanel";
+import ConfigureOpenPlay from "./components/ConfigureOpenPlay";
+import FinalResults from "./components/FinalResults";
+import JoinQueueCard from "./components/JoinQueueCard";
 import {
-  formatDurationMs,
   formatTime,
 } from "./lib/format";
 import { usePlayerAlerts } from "./hooks/usePlayerAlerts";
@@ -22,7 +23,6 @@ import { logout, subscribeToAuth } from "./lib/auth";
 
 import {
   getPlayerProfile,
-  formatSkillLevel,
   type PlayerProfile,
 } from "./lib/player";
 
@@ -31,7 +31,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ChangeEvent,
 } from "react";
 import "./App.css";
 
@@ -43,37 +42,27 @@ import {
   type QueuePlayer,
 } from "./lib/queue";
 
-import {
-  createInitialCycle,
-} from "./lib/fourOnFour";
 
 import {
-  addPendingPair,
   archiveOpenPlaySession,
   clearOpenPlay,
   correctGameScore,
   finishCourtGame,
   finishOpenPlay,
   getRankedPlayers,
-  removePendingPair,
   saveCourtDraftScore,
   setPlayerBreak,
   startNextCycle,
-  startOpenPlay,
   subscribeToOpenPlay,
-  subscribeToPendingPairRules,
   subscribeToSessionHistory,
   type ArchivedOpenPlaySession,
   type CourtState,
-  type PairRules,
   type OpenPlayState,
   type PlayerStats,
 } from "./lib/game";
 
 import {
-  calculateSessionEndTime,
   isSessionFinished,
-  validateSession,
   type OpenPlaySession,
 } from "./lib/session";
 
@@ -155,21 +144,14 @@ const [playerProfile, setPlayerProfile] =
     authReady && myPlayerId !== null;
   const [loading, setLoading] = useState(false);
 
-const [setupCourtCount, setSetupCourtCount] =
-  useState("1");
 
-const [setupDurationHours, setSetupDurationHours] =
-  useState("1");
 
   const [editingResult, setEditingResult] =
     useState<CompletedGame | null>(null);
   const [scores, setScores] = useState<ScoreInputs>({});
   const [finishingCourt, setFinishingCourt] = useState<number | null>(null);
-  const [startingOpenPlay, setStartingOpenPlay] = useState(false);
   const [clearingSession, setClearingSession] = useState(false);
 
-  const [showNewSessionOptions, setShowNewSessionOptions] =
-    useState(false);
 
   const [now, setNow] = useState(Date.now());
 
@@ -179,18 +161,7 @@ const [setupDurationHours, setSetupDurationHours] =
 
 
 
-const [
-  pendingPairRules,
-  setPendingPairRules,
-] = useState<PairRules>({
-  fixedPairs: [],
-  keepApartPairs: [],
-});
 
-const [
-  setupSkillBalance,
-  setSetupSkillBalance,
-] = useState(false);
 
 const [
   statsPlayerId,
@@ -325,11 +296,6 @@ useEffect(() => {
     return unsubscribe;
   }, []);
 
-  useEffect(() => {
-    return subscribeToPendingPairRules(
-      setPendingPairRules
-    );
-  }, []);
 
   useEffect(() => {
   const unsubscribe =
@@ -891,87 +857,6 @@ const sessionStats = useMemo(() => {
   // START 4-ON / 4-OFF OPEN PLAY
   // --------------------------------------------------
 
-  const handleStartOpenPlay = async () => {
-    const playerCount = players.length;
-    const courtCount = Number(setupCourtCount);
-    const durationHours = Number(setupDurationHours);
-
-    if (!Number.isInteger(courtCount) || courtCount < 1) {
-  alert("You need at least 1 available court.");
-  return;
-}
-
-    if (
-  !Number.isFinite(durationHours) ||
-  durationHours < 1
-) {
-  alert("Open play must be at least 1 hour.");
-  return;
-}
-
-    const startedAt = Date.now();
-
-    const session: OpenPlaySession = {
-      playerCount,
-      courtCount,
-      durationHours,
-      rotationMode: "4_ON_4_OFF",
-      startedAt,
-      endsAt: calculateSessionEndTime(startedAt, durationHours),
-      status: "active",
-    };
-
-    const validationErrors = validateSession(session);
-
-    if (validationErrors.length > 0) {
-      alert(validationErrors.join("\n"));
-      return;
-    }
-
-    const playablePlayerCount = courtCount * 4;
-
-    if (playerCount < playablePlayerCount) {
-      alert(
-        `You need at least ${playablePlayerCount} players to fill ${courtCount} courts.`
-      );
-      return;
-    }
-
-    const initialCycle = createInitialCycle(
-      players,
-      courtCount,
-      1
-    );
-
-    if (initialCycle.courts.length !== courtCount) {
-      alert("Unable to create a complete first cycle. Check the player and court counts.");
-      return;
-    }
-
-    setStartingOpenPlay(true);
-
-    try {
-      await startOpenPlay(
-  playerCount,
-  courtCount,
-  durationHours,
-  players,
-  {
-    ...pendingPairRules,
-    skillBalance: setupSkillBalance,
-  }
-);
-    } catch (error) {
-      console.error("Unable to start open play:", error);
-      alert(
-        `Unable to start open play.\n\n${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    } finally {
-      setStartingOpenPlay(false);
-    }
-  };
 
   // --------------------------------------------------
   // FINISH ONE COURT
@@ -1085,7 +970,6 @@ const sessionStats = useMemo(() => {
     advancingCycleRef.current = false;
     endingSessionRef.current = false;
 
-    setShowNewSessionOptions(false);
   } catch (error) {
     console.error(
       "Unable to start new session:",
@@ -1133,7 +1017,6 @@ const handleNewSessionClearPlayers = async () => {
     advancingCycleRef.current = false;
     endingSessionRef.current = false;
 
-    setShowNewSessionOptions(false);
   } catch (error) {
     console.error(
       "Unable to clear players:",
@@ -1446,146 +1329,21 @@ const handleNewSessionClearPlayers = async () => {
 
         <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 lg:grid-cols-[360px_1fr]">
           <aside className="space-y-6">
-            <section className="rounded-2xl bg-white p-6 shadow-lg ring-1 ring-slate-200">
-              <p className="text-xs font-black uppercase tracking-widest text-cyan-600">
-                Player Registration
-              </p>
-              <h2 className="mt-1 text-2xl font-black">Join the Queue</h2>
-              <p className="mt-2 text-sm text-slate-500">
-                Players registered here become part of the open-play player pool.
-              </p>
-
-              {!playerProfile ? (
-  <div className="mt-5">
-    {!showAuth ? (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-        <p className="text-sm font-black text-amber-900">
-          Player account required
-        </p>
-
-        <p className="mt-1 text-xs leading-5 text-amber-700">
-          Create an account or sign in before joining Open Play.
-        </p>
-
-        <button
-          type="button"
-          onClick={() => setShowAuth(true)}
-          className="mt-4 w-full rounded-xl bg-slate-950 px-4 py-3 font-black text-white hover:bg-slate-800"
-        >
-          CREATE ACCOUNT / LOGIN
-        </button>
-      </div>
-    ) : (
-      <div className="mt-4">
-        <PlayerAuth
-          onAuthenticated={handleAuthenticated}
-        />
-
-        <button
-          type="button"
-          onClick={() => setShowAuth(false)}
-          className="mt-3 w-full rounded-xl border border-slate-300 px-4 py-3 font-bold text-slate-700"
-        >
-          CANCEL
-        </button>
-      </div>
-    )}
-  </div>
-) : (
-  <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-    <div className="flex items-center gap-4">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-950 font-black text-white">
-        {playerProfile.name
-          .split(" ")
-          .filter(Boolean)
-          .map((part) => part[0])
-          .slice(0, 2)
-          .join("")
-          .toUpperCase()}
-      </div>
-
-      <div className="min-w-0">
-        <p className="truncate text-lg font-black">
-          {playerProfile.name}
-        </p>
-
-        <p className="text-sm font-bold text-cyan-600">
-          Skill Level{" "}
-          {formatSkillLevel(
-            playerProfile.skillLevel
-          )}
-        </p>
-
-        {playerProfile.email && (
-          <p className="truncate text-xs text-slate-500">
-            {playerProfile.email}
-          </p>
-        )}
-        
-      </div>
-    </div>
-
-    <div className="mt-4 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700">
-      ✓ SIGNED IN
-    </div>
-
-    {myPlayerId && (
-      <button
-        type="button"
-        onClick={() =>
-          setStatsPlayerId(myPlayerId)
-        }
-        className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-700 hover:bg-slate-100"
-      >
-        📊 My Stats
-      </button>
-    )}
-
-    <button
-      type="button"
-      onClick={() => void handleSignOut()}
-      className="mt-2 w-full rounded-xl px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100"
-    >
-      Sign out
-    </button>
-  </div>
-)}
-<button
-  type="button"
-  onClick={() => void handleJoinQueue()}
-  disabled={
-    loading ||
-    game?.status === "active" ||
-    !myPlayerId ||
-    !playerProfile ||
-    isMyPlayerRegistered
-  }
-  className="mt-4 w-full rounded-xl bg-emerald-500 px-4 py-3 font-black text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-slate-300"
->
-  {loading
-    ? "JOINING..."
-    : isMyPlayerRegistered
-      ? "✓ IN QUEUE"
-      : "JOIN QUEUE"}
-</button>
-
-<button
-  type="button"
-  onClick={() =>
-    void handleLeaveQueue()
-  }
-  disabled={
-    !isMyPlayerRegistered ||
-    isMyPlayerOnCourt
-  }
-  className="mt-3 w-full rounded-xl border border-slate-300 px-4 py-3 font-bold text-slate-700 disabled:opacity-50"
->
-  {isMyPlayerOnCourt
-    ? "CURRENTLY PLAYING"
-    : "LEAVE QUEUE"}
-</button>
-              
-            </section>
+            <JoinQueueCard
+              game={game}
+              playerProfile={playerProfile}
+              myPlayerId={myPlayerId}
+              isMyPlayerRegistered={isMyPlayerRegistered}
+              isMyPlayerOnCourt={isMyPlayerOnCourt}
+              loading={loading}
+              showAuth={showAuth}
+              setShowAuth={setShowAuth}
+              onAuthenticated={handleAuthenticated}
+              onJoin={handleJoinQueue}
+              onLeave={handleLeaveQueue}
+              onSignOut={handleSignOut}
+              onShowStats={() => myPlayerId && setStatsPlayerId(myPlayerId)}
+            />
 
             <section className="rounded-2xl bg-white p-6 shadow-lg ring-1 ring-slate-200">
               <div className="flex items-center justify-between">
@@ -1614,279 +1372,15 @@ const handleNewSessionClearPlayers = async () => {
 
           <section className="space-y-6">
             {game?.status === "finished" ? (
-              <section className="rounded-2xl bg-slate-950 p-6 text-white shadow-xl">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-widest text-emerald-400">
-                      Final Results
-                    </p>
-                    <h2 className="mt-1 text-3xl font-black">Open Play Complete</h2>
-                    
-                    <p className="mt-2 text-slate-400">
-                      {game.playerCount} players · {game.courtCount} courts · {game.durationHours} hours
-                    </p>
-                  </div>
-
-                  {/* SESSION SUMMARY */}
-
-<div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-
-  <div className="rounded-xl bg-slate-900 p-4">
-    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-      Total Games
-    </p>
-
-    <p className="mt-1 text-2xl font-black text-white">
-      {sessionStats.totalGames}
-    </p>
-  </div>
-
-  <div className="rounded-xl bg-slate-900 p-4">
-    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-      Cycles
-    </p>
-
-    <p className="mt-1 text-2xl font-black text-white">
-      {sessionStats.totalCycles}
-    </p>
-  </div>
-
-  <div className="rounded-xl bg-slate-900 p-4">
-    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-      Avg Game
-    </p>
-
-    <p className="mt-1 text-2xl font-black text-cyan-300">
-      {formatDurationMs(
-        sessionStats.averageDuration
-      )}
-    </p>
-  </div>
-
-  <div className="rounded-xl bg-slate-900 p-4">
-    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-      Longest Game
-    </p>
-
-    <p className="mt-1 text-2xl font-black text-emerald-300">
-      {formatDurationMs(
-        sessionStats.longestDuration
-      )}
-    </p>
-  </div>
-
-</div>
-                  {isAdmin && (
-                  <button
-                  type="button"
-                  onClick={() =>
-                    setShowNewSessionOptions(true)
-                  }
-                  disabled={clearingSession}
-                  className="rounded-xl bg-white px-5 py-3 font-black text-slate-950 transition hover:bg-slate-100 disabled:opacity-50"
-                >
-                  {clearingSession
-                    ? "PLEASE WAIT..."
-                    : "NEW SESSION"}
-                </button>
-                  )}
-
-                {isAdmin && showNewSessionOptions && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
-    <div className="w-full max-w-md rounded-2xl bg-white p-6 text-slate-950 shadow-2xl">
-
-      <p className="text-xs font-black uppercase tracking-widest text-cyan-600">
-        New Session
-      </p>
-
-      <h2 className="mt-2 text-2xl font-black">
-        Start another Open Play?
-      </h2>
-
-      <p className="mt-2 text-sm leading-6 text-slate-500">
-        Choose whether the currently registered
-        players should stay in the player pool.
-      </p>
-
-      <div className="mt-6 space-y-3">
-
-        <button
-          type="button"
-          onClick={() =>
-            void handleNewSessionKeepPlayers()
-          }
-          disabled={clearingSession}
-          className="w-full rounded-xl bg-emerald-500 px-5 py-4 text-left font-black text-white hover:bg-emerald-400 disabled:opacity-50"
-        >
-          <span className="block">
-            KEEP PLAYERS
-          </span>
-
-          <span className="mt-1 block text-xs font-medium opacity-80">
-            Keep all registered players and reset
-            courts, games, ranking, and timer.
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() =>
-            void handleNewSessionClearPlayers()
-          }
-          disabled={clearingSession}
-          className="w-full rounded-xl bg-red-50 px-5 py-4 text-left font-black text-red-700 hover:bg-red-100 disabled:opacity-50"
-        >
-          <span className="block">
-            CLEAR PLAYERS
-          </span>
-
-          <span className="mt-1 block text-xs font-medium text-red-500">
-            Remove everyone from the current
-            player pool and start fresh.
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() =>
-            setShowNewSessionOptions(false)
-          }
-          disabled={clearingSession}
-          className="w-full rounded-xl border border-slate-300 px-5 py-3 font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-        >
-          CANCEL
-        </button>
-
-      </div>
-    </div>
-  </div>
-)}
-                </div>
-{/* PLAYER STATS */}
-
-<div className="mt-6">
-  <div className="mb-4">
-    <p className="text-xs font-black uppercase tracking-widest text-cyan-400">
-      Player Stats
-    </p>
-
-    <h3 className="text-xl font-black text-white">
-      Performance Breakdown
-    </h3>
-  </div>
-
-  <div className="overflow-x-auto rounded-xl border border-slate-800">
-    <div className="min-w-[760px]">
-
-      {/* HEADER */}
-      <div className="grid grid-cols-[48px_1fr_70px_70px_70px_80px_70px_70px_80px] gap-3 bg-slate-900 px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-400">
-  <span>#</span>
-  <span>Player</span>
-  <span>Games</span>
-  <span>Wins</span>
-  <span>Losses</span>
-  <span>Win %</span>
-  <span>PF</span>
-  <span>PA</span>
-  <span>+/-</span>
-</div>
-
-      {rankedPlayers.map((player, index) => {
-        const winRate =
-          player.gamesPlayed > 0
-            ? Math.round(
-                (player.wins /
-                  player.gamesPlayed) *
-                  100
-              )
-            : 0;
-
-        const pointDiff =
-          player.pointsFor -
-          player.pointsAgainst;
-
-        return (
-          <div
-  key={`stats-${player.playerId}`}
-  className={`grid grid-cols-[48px_1fr_70px_70px_70px_80px_70px_70px_80px] items-center gap-3 border-t border-slate-800 px-4 py-3 text-sm ${
-    index === 0
-      ? "bg-amber-400/10"
-      : index === 1
-        ? "bg-slate-300/10"
-        : index === 2
-          ? "bg-orange-500/10"
-          : ""
-  }`}
->
-  <span
-    className={`flex h-8 w-8 items-center justify-center rounded-full font-black ${
-      index === 0
-        ? "bg-amber-400 text-slate-950"
-        : index === 1
-          ? "bg-slate-300 text-slate-950"
-          : index === 2
-            ? "bg-orange-500 text-white"
-            : "text-cyan-400"
-    }`}
-  >
-    {index === 0
-      ? "🥇"
-      : index === 1
-        ? "🥈"
-        : index === 2
-          ? "🥉"
-          : index + 1}
-  </span>
-
-  <span className="truncate font-bold text-white">
-    {player.name}
-  </span>
-
-  <span className="text-slate-300">
-    {player.gamesPlayed}
-  </span>
-
-  <span className="font-black text-emerald-300">
-    {player.wins}
-  </span>
-
-  <span className="text-red-300">
-    {player.losses}
-  </span>
-
-  <span className="font-bold text-white">
-    {winRate}%
-  </span>
-
-  <span className="text-slate-300">
-    {player.pointsFor}
-  </span>
-
-  <span className="text-slate-300">
-    {player.pointsAgainst}
-  </span>
-
-  <span
-    className={`font-black ${
-      pointDiff > 0
-        ? "text-emerald-300"
-        : pointDiff < 0
-          ? "text-red-300"
-          : "text-slate-400"
-    }`}
-  >
-    {pointDiff > 0
-      ? `+${pointDiff}`
-      : pointDiff}
-  </span>
-</div>
-        );
-      })}
-    </div>
-  </div>
-</div>
-                
-              </section>
+              <FinalResults
+                game={game!}
+                isAdmin={isAdmin}
+                rankedPlayers={rankedPlayers}
+                sessionStats={sessionStats}
+                clearingSession={clearingSession}
+                onKeepPlayers={handleNewSessionKeepPlayers}
+                onClearPlayers={handleNewSessionClearPlayers}
+              />
             ) : !isAdmin ? (
               <section className="rounded-2xl bg-slate-950 p-6 text-white shadow-xl">
                 <p className="text-xs font-black uppercase tracking-widest text-cyan-400">
@@ -1898,111 +1392,10 @@ const handleNewSessionClearPlayers = async () => {
                 </p>
               </section>
             ) : (
-              <section className="rounded-2xl bg-slate-950 p-6 text-white shadow-xl">
-                <p className="text-xs font-black uppercase tracking-widest text-cyan-400">
-                  Before Starting
-                </p>
-                <h2 className="mt-1 text-3xl font-black">Configure Open Play</h2>
-                <p className="mt-2 max-w-2xl text-slate-400">
-                  The player count is taken directly from the registered queue. Choose the number of available courts and the open-play duration.
-                </p>
-
-                <div className="mt-6 grid gap-4 sm:grid-cols-3">
-                  <div className="rounded-xl bg-slate-900 p-5">
-                    <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Players</p>
-                    <p className="mt-1 text-4xl font-black text-white">{registeredPlayerCount}</p>
-                    <p className="mt-1 text-xs text-slate-500">Minimum: {Math.max(1, Number(setupCourtCount)) * 4}</p>
-                  </div>
-
-                  <label className="rounded-xl bg-slate-900 p-5">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                      Courts
-                    </span>
-                    <input
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={setupCourtCount}
-                      onChange={(event: ChangeEvent<HTMLInputElement>) => setSetupCourtCount(event.target.value)}
-                      className="mt-1 w-full bg-transparent text-4xl font-black text-white outline-none"
-                    />
-                    <span className="text-xs text-slate-500">Minimum: 1</span>
-                  </label>
-
-                  <label className="rounded-xl bg-slate-900 p-5">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                      Hours
-                    </span>
-                    <input
-                      type="number"
-                      min="1"
-                      step="0.5"
-                      value={setupDurationHours}
-                      onChange={(event: ChangeEvent<HTMLInputElement>) => setSetupDurationHours(event.target.value)}
-                      className="mt-1 w-full bg-transparent text-4xl font-black text-white outline-none"
-                    />
-                    <span className="text-xs text-slate-500">Minimum: 1</span>
-                  </label>
-                </div>
-
-                <div className="mt-5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-4 text-sm text-cyan-100">
-                  <strong>Rotation:</strong> every court has 4 players. When a court finishes, the next 4 are chosen by fewest games played and longest wait, mixing partners and opponents as much as possible.
-                </div>
-
-                <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl bg-slate-900 p-4">
-                  <input
-                    type="checkbox"
-                    checked={setupSkillBalance}
-                    onChange={(event) =>
-                      setSetupSkillBalance(
-                        event.target.checked
-                      )
-                    }
-                    className="mt-1 h-5 w-5 accent-cyan-500"
-                  />
-                  <span>
-                    <span className="block font-black text-white">
-                      Balance teams by skill
-                    </span>
-                    <span className="mt-1 block text-sm text-slate-400">
-                      Prefer evenly matched teams using player skill levels. Fair turns and partner variety still come first.
-                    </span>
-                  </span>
-                </label>
-
-                <div className="mt-5 space-y-4">
-                  <PairRulesEditor
-                    kind="fixed"
-                    players={players}
-                    pairs={pendingPairRules.fixedPairs}
-                    description="Pair players from the queue before starting. They will play together as teammates all session, including the first round."
-                    onAdd={(a, b) => addPendingPair("fixed", a, b)}
-                    onRemove={(pair) => removePendingPair("fixed", pair)}
-                  />
-
-                  <PairRulesEditor
-                    kind="keepApart"
-                    players={players}
-                    pairs={pendingPairRules.keepApartPairs}
-                    description="These players will never be put on the same team. They can still play against each other."
-                    onAdd={(a, b) => addPendingPair("keepApart", a, b)}
-                    onRemove={(pair) => removePendingPair("keepApart", pair)}
-                  />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => void handleStartOpenPlay()}
-                  disabled={
-                    startingOpenPlay ||
-                    players.length <
-                      Math.max(1, Number(setupCourtCount)) * 4
-}
-                  className="mt-5 w-full rounded-xl bg-emerald-500 px-5 py-4 text-lg font-black text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-500"
-                >
-                  {startingOpenPlay ? "STARTING OPEN PLAY..." : "START OPEN PLAY"}
-                </button>
-              </section>
+              <ConfigureOpenPlay
+                players={players}
+                registeredPlayerCount={registeredPlayerCount}
+              />
             )}
 
             <div className="mt-6">
