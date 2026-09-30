@@ -9,6 +9,7 @@ import {
   subscribeToQueue,
   type QueuePlayer,
 } from "../lib/queue";
+import JoinQrCode from "./JoinQrCode";
 import {
   formatClock,
   getCourtElapsedMs,
@@ -83,6 +84,13 @@ export default function TvDisplay() {
           {queue.length === 1 ? "" : "s"} in
           the queue
         </p>
+
+        <div className="mt-10 flex flex-col items-center">
+          <JoinQrCode size={280} />
+          <p className="mt-4 text-2xl font-black">
+            Scan to join the queue
+          </p>
+        </div>
       </div>
     );
   }
@@ -149,6 +157,18 @@ export default function TvDisplay() {
                 ))}
               </ol>
             )}
+          </div>
+
+          <div className="flex items-center gap-5 rounded-3xl bg-slate-900 p-5">
+            <JoinQrCode size={132} className="shrink-0" />
+            <div>
+              <p className="text-2xl font-black">
+                Scan to join
+              </p>
+              <p className="mt-1 text-base font-bold text-slate-400">
+                Get alerts when you're up
+              </p>
+            </div>
           </div>
 
           {later.length > 0 && (

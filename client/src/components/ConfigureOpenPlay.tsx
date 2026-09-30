@@ -19,12 +19,14 @@ import {
 type ConfigureOpenPlayProps = {
   players: QueuePlayer[];
   registeredPlayerCount: number;
+  onShowJoinQr: () => void;
 };
 
 // Admin-only setup panel shown before a session starts.
 export default function ConfigureOpenPlay({
   players,
   registeredPlayerCount,
+  onShowJoinQr,
 }: ConfigureOpenPlayProps) {
   const [setupCourtCount, setSetupCourtCount] = useState("1");
 
@@ -216,6 +218,14 @@ export default function ConfigureOpenPlay({
           onRemove={(pair) => removePendingPair("keepApart", pair)}
         />
       </div>
+
+      <button
+        type="button"
+        onClick={onShowJoinQr}
+        className="mt-5 w-full rounded-xl border border-slate-700 px-5 py-3 font-black text-white hover:bg-slate-900"
+      >
+        ▦ SHOW JOIN QR CODE
+      </button>
 
       <button
         type="button"

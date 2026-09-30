@@ -66,6 +66,7 @@ import {
 // Windows that open rarely load on first use.
 const PlayerStatsModal = lazy(() => import("./components/PlayerStatsModal"));
 const EditScoreModal = lazy(() => import("./components/EditScoreModal"));
+const JoinQrModal = lazy(() => import("./components/JoinQrModal"));
 const SessionHistoryModal = lazy(() => import("./components/SessionHistoryModal"));
 const ManagePlayersModal = lazy(() => import("./components/ManagePlayersModal"));
 const CourtEditorModal = lazy(() => import("./components/CourtEditorModal"));
@@ -149,6 +150,8 @@ const [playerProfile, setPlayerProfile] =
   const [loading, setLoading] = useState(false);
 
 
+
+  const [showJoinQr, setShowJoinQr] = useState(false);
 
   const [editingResult, setEditingResult] =
     useState<CompletedGame | null>(null);
@@ -649,6 +652,12 @@ const orderedPlayerPool = useMemo(() => {
       }
       onClose={() => setStatsPlayerId(null)}
     />
+    </Suspense>
+  );
+
+  const joinQrModal = showJoinQr && (
+    <Suspense fallback={null}>
+      <JoinQrModal onClose={() => setShowJoinQr(false)} />
     </Suspense>
   );
 
@@ -1405,6 +1414,7 @@ const handleNewSessionClearPlayers = async () => {
               <ConfigureOpenPlay
                 players={players}
                 registeredPlayerCount={registeredPlayerCount}
+                  onShowJoinQr={() => setShowJoinQr(true)}
               />
             )}
 
@@ -1420,6 +1430,8 @@ const handleNewSessionClearPlayers = async () => {
         {statsModal}
 
       {editScoreModal}
+
+      {joinQrModal}
       </div>
     );
   }
@@ -1434,6 +1446,8 @@ const handleNewSessionClearPlayers = async () => {
       {statsModal}
 
         {editScoreModal}
+
+      {joinQrModal}
 
       {showAuth && !playerProfile && (
         <div className="fixed inset-0 z-[125] flex items-center justify-center bg-slate-950/80 p-4">
@@ -1776,6 +1790,7 @@ const handleNewSessionClearPlayers = async () => {
               onManagePlayers={() => setShowManagePlayers(true)}
               onShowHistory={() => setShowSessionHistory(true)}
               onShowStats={setStatsPlayerId}
+      onShowJoinQr={() => setShowJoinQr(true)}
             />
 
             {/* ======================================= */}

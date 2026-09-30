@@ -13,6 +13,7 @@ type PlayerQueuePanelProps = {
   onManagePlayers: () => void;
   onShowHistory: () => void;
   onShowStats: (playerId: string) => void;
+  onShowJoinQr: () => void;
 };
 
 export default function PlayerQueuePanel({
@@ -28,6 +29,7 @@ export default function PlayerQueuePanel({
   onManagePlayers,
   onShowHistory,
   onShowStats,
+  onShowJoinQr,
 }: PlayerQueuePanelProps) {
   return (
     <section className="rounded-2xl bg-white p-5 shadow ring-1 ring-slate-200">
@@ -56,6 +58,16 @@ export default function PlayerQueuePanel({
               className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-700 transition hover:bg-slate-100"
             >
               PLAYER STATS
+            </button>
+          )}
+
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={onShowJoinQr}
+              className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-700 transition hover:bg-slate-100"
+            >
+              ▦ JOIN QR CODE
             </button>
           )}
 
