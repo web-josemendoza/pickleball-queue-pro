@@ -6,6 +6,9 @@ import ConnectionBanner from "./components/ConnectionBanner";
 
 // The player app loads directly (no extra round trip on
 // phones); the single venue TV loads its screen on demand.
+// The entry file is never hot-reloaded, so this rule
+// doesn't apply here.
+// eslint-disable-next-line react-refresh/only-export-components
 const TvDisplay = lazy(() => import("./components/TvDisplay"));
 
 // ?view=tv shows the read-only venue display.
