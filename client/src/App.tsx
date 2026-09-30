@@ -8,17 +8,15 @@ import EditScoreModal from "./components/EditScoreModal";
 import SessionHistoryModal from "./components/SessionHistoryModal";
 import ManagePlayersModal from "./components/ManagePlayersModal";
 import CourtEditorModal from "./components/CourtEditorModal";
+import CourtCard from "./components/CourtCard";
+import LiveRanking from "./components/LiveRanking";
+import PlayerStatusCard from "./components/PlayerStatusCard";
+import PlayerQueuePanel from "./components/PlayerQueuePanel";
 import {
   formatDurationMs,
   formatTime,
 } from "./lib/format";
 import { usePlayerAlerts } from "./hooks/usePlayerAlerts";
-import {
-  formatClock,
-  getCourtElapsedMs,
-  isLongGame,
-  LONG_GAME_MINUTES,
-} from "./lib/courtTiming";
 
 import { logout, subscribeToAuth } from "./lib/auth";
 
@@ -106,12 +104,6 @@ function formatRemaining(milliseconds: number) {
 }
 
 
-function getCourtTeamPlayers(court: CourtState) {
-  return {
-    teamA: court.players.slice(0, 2),
-    teamB: court.players.slice(2, 4),
-  };
-}
 
 
 
@@ -1327,207 +1319,6 @@ const handleNewSessionClearPlayers = async () => {
     });
   };
 
-  const renderCourt = (court: CourtState) => {
-    const { teamA, teamB } = getCourtTeamPlayers(court);
-    const score = scores[court.courtNumber] ?? {
-      a: court.draftScoreA ?? "",
-      b: court.draftScoreB ?? "",
-    };
-    const teamAWon =
-      court.status === "completed" &&
-      court.scoreA !== null &&
-      court.scoreB !== null &&
-      court.scoreA > court.scoreB;
-    const teamBWon =
-      court.status === "completed" &&
-      court.scoreA !== null &&
-      court.scoreB !== null &&
-      court.scoreB > court.scoreA;
-
-    const longGame = isLongGame(court, now);
-
-    return (
-      <section
-        key={court.courtNumber}
-        className={`rounded-2xl border bg-slate-900 p-5 shadow-xl ${
-          longGame
-            ? "border-amber-400"
-            : "border-slate-700"
-        }`}
-      >
-        <div className="mb-5 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-cyan-400">
-              Court {court.courtNumber}
-            </p>
-            <h2 className="text-2xl font-black text-white">
-              {court.status === "completed" ? "Game Complete" : "Game On"}
-            </h2>
-          </div>
-
-          <div className="flex flex-col items-end gap-1">
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-bold ${
-                court.status === "completed"
-                  ? "bg-emerald-500/20 text-emerald-300"
-                  : "bg-cyan-500/20 text-cyan-300"
-              }`}
-            >
-              {court.status.toUpperCase()}
-            </span>
-
-            {court.status === "playing" && (
-              <span
-                className={`text-sm font-black tabular-nums ${
-                  longGame
-                    ? "text-amber-300"
-                    : "text-slate-400"
-                }`}
-              >
-                ⏱ {formatClock(
-                  getCourtElapsedMs(court, now)
-                )}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {longGame && (
-          <p className="-mt-2 mb-4 rounded-xl bg-amber-500/15 px-4 py-2 text-sm font-bold text-amber-200">
-            This game has run over {LONG_GAME_MINUTES} minutes. Check that the score was entered.
-          </p>
-        )}
-
-{isAdmin &&
-  court.status === "playing" && (
-    <button
-      type="button"
-      onClick={() =>
-        handleOpenCourtEditor(
-          court
-        )
-      }
-      className="mb-4 w-full rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm font-black text-amber-300 transition hover:bg-amber-500/20"
-    >
-      EDIT PLAYERS & TEAMS
-    </button>
-  )}
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div
-            className={`rounded-xl border p-4 ${
-              teamAWon
-                ? "border-emerald-500/60 bg-emerald-500/10"
-                : "border-slate-700 bg-slate-950/50"
-            }`}
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Team A
-              </span>
-              {teamAWon && (
-                <span className="text-xs font-bold text-emerald-300">WINNER</span>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              {teamA.map((player) => (
-                <div
-                  key={player.id}
-                  className="rounded-lg bg-slate-800 px-3 py-3 font-semibold text-white"
-                >
-                  {player.name}
-                </div>
-              ))}
-            </div>
-
-            {court.status === "playing" ? (
-              <input
-                type="number"
-                min="0"
-                value={score.a}
-                onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                  handleDraftScoreChange(
-                    court,
-                    "a",
-                    event.target.value
-                  )
-                }
-                placeholder="Score"
-                className="mt-4 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-4 text-center text-3xl font-black text-white outline-none focus:border-cyan-400"
-              />
-            ) : (
-              <div className="mt-4 rounded-xl bg-slate-950 px-4 py-4 text-center text-3xl font-black text-white">
-                {court.scoreA ?? 0}
-              </div>
-            )}
-          </div>
-
-          <div
-            className={`rounded-xl border p-4 ${
-              teamBWon
-                ? "border-emerald-500/60 bg-emerald-500/10"
-                : "border-slate-700 bg-slate-950/50"
-            }`}
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Team B
-              </span>
-              {teamBWon && (
-                <span className="text-xs font-bold text-emerald-300">WINNER</span>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              {teamB.map((player) => (
-                <div
-                  key={player.id}
-                  className="rounded-lg bg-slate-800 px-3 py-3 font-semibold text-white"
-                >
-                  {player.name}
-                </div>
-              ))}
-            </div>
-
-            {court.status === "playing" ? (
-              <input
-                type="number"
-                min="0"
-                value={score.b}
-                onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                  handleDraftScoreChange(
-                    court,
-                    "b",
-                    event.target.value
-                  )
-                }
-                placeholder="Score"
-                className="mt-4 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-4 text-center text-3xl font-black text-white outline-none focus:border-cyan-400"
-              />
-            ) : (
-              <div className="mt-4 rounded-xl bg-slate-950 px-4 py-4 text-center text-3xl font-black text-white">
-                {court.scoreB ?? 0}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {court.status === "playing" && (
-          <button
-            type="button"
-            disabled={finishingCourt === court.courtNumber}
-            onClick={() => void handleFinishCourt(court)}
-            className="mt-4 w-full rounded-xl bg-emerald-500 px-5 py-4 font-black text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {finishingCourt === court.courtNumber
-              ? "SAVING RESULT..."
-              : `FINISH COURT ${court.courtNumber}`}
-          </button>
-        )}
-      </section>
-    );
-  };
 
 
   const [
@@ -2490,9 +2281,26 @@ const handleNewSessionClearPlayers = async () => {
                   : "max-w-xl"
               }`}
             >
-              {game.courts.map(
-                renderCourt
-              )}
+              {game.courts.map((court) => (
+                <CourtCard
+                  key={court.courtNumber}
+                  court={court}
+                  score={
+                    scores[court.courtNumber] ?? {
+                      a: court.draftScoreA ?? "",
+                      b: court.draftScoreB ?? "",
+                    }
+                  }
+                  now={now}
+                  isAdmin={isAdmin}
+                  finishing={finishingCourt === court.courtNumber}
+                  onEdit={() => handleOpenCourtEditor(court)}
+                  onScoreChange={(team, value) =>
+                    handleDraftScoreChange(court, team, value)
+                  }
+                  onFinish={() => void handleFinishCourt(court)}
+                />
+              ))}
             </div>
 
             {/* ======================================= */}
@@ -2552,462 +2360,48 @@ const handleNewSessionClearPlayers = async () => {
             {/* PLAYER QUEUE */}
             {/* ======================================= */}
 
-            <section className="rounded-2xl bg-white p-5 shadow ring-1 ring-slate-200">
-
-              <div className="flex items-center justify-between">
-
-                <div>
-                  <p className="text-xs font-black uppercase tracking-widest text-cyan-600">
-                    Player Queue
-                  </p>
-
-                  <h2 className="text-xl font-black">
-                    Registered
-                  </h2>
-
-                  {isAdmin && (
-  <button
-    type="button"
-    onClick={() =>
-      setShowManagePlayers(true)
-    }
-    className="mt-3 w-full rounded-xl bg-slate-950 px-4 py-3 text-xs font-black uppercase tracking-wider text-white transition hover:bg-slate-800"
-  >
-    MANAGE PLAYERS
-  </button>
-)}
-
-{isAdmin && statsPlayerOptions.length > 0 && (
-  <button
-    type="button"
-    onClick={() =>
-      setStatsPlayerId(
-        statsPlayerOptions[0].id
-      )
-    }
-    className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-700 transition hover:bg-slate-100"
-  >
-    PLAYER STATS
-  </button>
-)}
-
-{isAdmin && (
-  <a
-    href="?view=tv"
-    target="_blank"
-    rel="noreferrer"
-    className="mt-3 block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-center text-xs font-black uppercase tracking-wider text-slate-700 transition hover:bg-slate-100"
-  >
-    OPEN TV DISPLAY ↗
-  </a>
-)}
-
-{isAdmin && (
-  <button
-    type="button"
-    onClick={() =>
-      setShowSessionHistory(true)
-    }
-    className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-700 transition hover:bg-slate-100"
-  >
-    PAST SESSIONS
-  </button>
-)}
-
-                </div>
-
-                <span className="rounded-full bg-slate-100 px-3 py-2 font-black">
-                  {registeredPlayerCount}
-                </span>
-
-              </div>
-
-              {/* ===================================== */}
-              {/* ON COURT */}
-              {/* ===================================== */}
-
-              <div className="mt-5">
-
-                <div className="mb-3 flex items-center justify-between">
-
-                  <p className="text-xs font-black uppercase tracking-widest text-emerald-600">
-                    On Court
-                  </p>
-
-                  <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-black text-emerald-700">
-                    {onCourtPlayers.length}
-                  </span>
-
-                </div>
-
-                <div className="space-y-2">
-
-                  {onCourtPlayers.map(
-                    (player) => (
-                      <div
-                        key={player.id}
-                        className="flex items-center justify-between rounded-xl bg-slate-800 px-4 py-3"
-                      >
-
-                        <div className="flex min-w-0 items-center gap-3">
-
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-700 font-black text-white">
-                            {player.name
-                              .charAt(0)
-                              .toUpperCase()}
-                          </div>
-
-                          <span className="truncate font-bold text-white">
-                            {player.name}
-                          </span>
-
-                        </div>
-
-                        <span className="ml-3 shrink-0 rounded-full bg-emerald-500/20 px-2 py-1 text-xs font-black text-emerald-300">
-                          PLAYING
-                        </span>
-
-                      </div>
-                    )
-                  )}
-
-                </div>
-
-              </div>
-
-              {/* ===================================== */}
-              {/* UP NEXT */}
-              {/* ===================================== */}
-
-              <div className="mt-6 border-t border-slate-200 pt-5">
-
-                <div className="mb-3 flex items-center justify-between">
-
-                  <p className="text-xs font-black uppercase tracking-widest text-orange-700">
-                    Up Next
-                  </p>
-
-                  <span className="rounded-full bg-orange-100 px-2 py-1 text-xs font-black text-orange-700">
-                    {upNextPlayers.length}
-                  </span>
-
-                </div>
-
-                {upNextPlayers.length ===
-                0 ? (
-                  <div className="rounded-xl border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">
-                    No players waiting.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-
-                    {upNextPlayers.map(
-                      (
-                        player,
-                        index
-                      ) => (
-                        <div
-                          key={
-                            player.id
-                          }
-                          className="flex items-center justify-between rounded-xl border border-orange-700 bg-orange-600 px-4 py-3 shadow-sm">
-
-                          <div className="flex min-w-0 items-center gap-3">
-
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-900 font-black text-white">
-                              {player.name
-                                .charAt(
-                                  0
-                                )
-                                .toUpperCase()}
-                            </div>
-
-                            <span className="truncate font-bold text-white">
-                              {
-                                player.name
-                              }
-                            </span>
-
-                          </div>
-
-                          <span className="ml-3 shrink-0 rounded-full bg-orange-950/60 px-2 py-1 text-xs font-black text-orange-100">
-                            NEXT #
-                            {index +
-                              1}
-                          </span>
-
-                        </div>
-                      )
-                    )}
-
-                  </div>
-                )}
-
-              </div>
-
-              {/* ===================================== */}
-              {/* WAITING */}
-              {/* ===================================== */}
-
-              {laterWaitingPlayers.length >
-                0 && (
-                <div className="mt-6 border-t border-slate-200 pt-5">
-
-                  <div className="mb-3 flex items-center justify-between">
-
-                    <p className="text-xs font-black uppercase tracking-widest text-slate-500">
-                      Waiting
-                    </p>
-
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-black text-slate-600">
-                      {
-                        laterWaitingPlayers.length
-                      }
-                    </span>
-
-                  </div>
-
-                  <div className="space-y-2">
-
-                    {laterWaitingPlayers.map(
-                      (
-                        player,
-                        index
-                      ) => (
-                        <div
-                          key={
-                            player.id
-                          }
-                          className="flex items-center justify-between rounded-xl bg-slate-100 px-4 py-3"
-                        >
-
-                          <div className="flex min-w-0 items-center gap-3">
-
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-300 font-black text-slate-700">
-                              {player.name
-                                .charAt(
-                                  0
-                                )
-                                .toUpperCase()}
-                            </div>
-
-                            <span className="truncate font-bold text-slate-700">
-                              {
-                                player.name
-                              }
-                            </span>
-
-                          </div>
-
-                          <span className="ml-3 shrink-0 rounded-full bg-slate-200 px-2 py-1 text-xs font-black text-slate-600">
-                            WAIT #
-                            {upNextPlayers.length +
-                              index +
-                              1}
-                          </span>
-
-                        </div>
-                      )
-                    )}
-
-                  </div>
-
-                </div>
-              )}
-
-              {onBreakPlayers.length > 0 && (
-                <div className="mt-6 border-t border-slate-200 pt-5">
-                  <div className="mb-3 flex items-center justify-between">
-                    <p className="text-xs font-black uppercase tracking-widest text-amber-600">
-                      On Break
-                    </p>
-
-                    <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-black text-amber-700">
-                      {onBreakPlayers.length}
-                    </span>
-                  </div>
-
-                  <div className="space-y-2">
-                    {onBreakPlayers.map((player) => (
-                      <div
-                        key={player.id}
-                        className="flex items-center justify-between rounded-xl bg-amber-50 px-4 py-3"
-                      >
-                        <span className="truncate font-bold text-amber-900">
-                          ☕ {player.name}
-                        </span>
-
-                        {isAdmin && (
-                          <button
-                            type="button"
-                            disabled={savingBreakId === player.id}
-                            onClick={() =>
-                              void handleToggleBreak(
-                                player.id,
-                                false
-                              )
-                            }
-                            className="ml-3 shrink-0 rounded-lg border border-amber-300 px-3 py-1 text-xs font-black text-amber-700 hover:bg-amber-100 disabled:opacity-50"
-                          >
-                            BACK IN
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-            </section>
+            <PlayerQueuePanel
+              isAdmin={isAdmin}
+              registeredPlayerCount={registeredPlayerCount}
+              onCourtPlayers={onCourtPlayers}
+              upNextPlayers={upNextPlayers}
+              laterWaitingPlayers={laterWaitingPlayers}
+              onBreakPlayers={onBreakPlayers}
+              statsPlayerOptions={statsPlayerOptions}
+              savingBreakId={savingBreakId}
+              onToggleBreak={handleToggleBreak}
+              onManagePlayers={() => setShowManagePlayers(true)}
+              onShowHistory={() => setShowSessionHistory(true)}
+              onShowStats={setStatsPlayerId}
+            />
 
             {/* ======================================= */}
             {/* LIVE RANKING */}
             {/* ======================================= */}
 
-            <section className="rounded-2xl bg-slate-950 p-5 text-white shadow-xl">
-
-              <p className="text-xs font-black uppercase tracking-widest text-emerald-400">
-                Live Ranking
-              </p>
-
-              <h2 className="text-xl font-black">
-                Wins
-              </h2>
-
-              <div className="mt-4 space-y-2">
-
-                {rankedPlayers.length ===
-                0 ? (
-                  <p className="rounded-xl bg-slate-900 p-4 text-sm text-slate-500">
-                    Complete a court to
-                    start ranking players.
-                  </p>
-                ) : (
-                  rankedPlayers
-                    .slice(0, 10)
-                    .map(
-                      (
-                        player,
-                        index
-                      ) => (
-                        <div
-                          key={
-                            player.playerId
-                          }
-                          className="flex items-center justify-between rounded-xl bg-slate-900 px-3 py-3"
-                        >
-
-                          <div className="flex min-w-0 items-center gap-3">
-
-                            <span className="w-5 text-sm font-black text-cyan-400">
-                              {index +
-                                1}
-                            </span>
-
-                            <span className="truncate font-bold">
-                              {
-                                player.name
-                              }
-                            </span>
-
-                          </div>
-
-                          <span className="font-black">
-                            {
-                              player.wins
-                            }
-                            W
-                          </span>
-
-                        </div>
-                      )
-                    )
-                )}
-
-              </div>
-
-            </section>
+            <LiveRanking
+              rankedPlayers={rankedPlayers}
+            />
 
             {/* ======================================= */}
             {/* PLAYER STATUS */}
             {/* ======================================= */}
 
-            <section className="rounded-2xl bg-white p-5 shadow ring-1 ring-slate-200">
-
-              <p className="text-xs font-black uppercase tracking-widest text-slate-500">
-                Player Status
-              </p>
-<p className="mt-2 text-sm font-semibold text-slate-700">
-  {myCourtNumber !== null
-    ? `You are currently playing on Court ${myCourtNumber}.`
-    : isMyPlayerOnBreak
-      ? "You are ON BREAK. You won't be called until you come back."
-    : myWaitingPosition !== null
-      ? myWaitingPosition <= upNextCount
-        ? `You are UP NEXT #${myWaitingPosition}.`
-        : `You are WAITING #${myWaitingPosition}.`
-      : isMyPlayerRegistered
-        ? "You are registered in this session."
-        : "You are not registered in this session."}
-</p>
-
-              {isMyPlayerRegistered && myPlayerId && (
-                <button
-                  type="button"
-                  disabled={savingBreakId === myPlayerId}
-                  onClick={() =>
-                    void handleToggleBreak(
-                      myPlayerId,
-                      !isMyPlayerOnBreak
-                    )
-                  }
-                  className={
-                    isMyPlayerOnBreak
-                      ? "mt-4 w-full rounded-xl bg-emerald-500 px-4 py-3 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-400 disabled:opacity-50"
-                      : "mt-4 w-full rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs font-black uppercase tracking-wider text-amber-700 transition hover:bg-amber-100 disabled:opacity-50"
-                  }
-                >
-                  {isMyPlayerOnBreak
-                    ? "I'm back, put me in the queue"
-                    : isMyPlayerOnCourt
-                      ? "Take a break after this game"
-                      : "☕ Take a break"}
-                </button>
-              )}
-
-              {isMyPlayerRegistered && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    alertsEnabled
-                      ? disableAlerts()
-                      : void enableAlerts()
-                  }
-                  className={
-                    alertsEnabled
-                      ? "mt-4 w-full rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-xs font-black uppercase tracking-wider text-emerald-700 transition hover:bg-emerald-100"
-                      : "mt-4 w-full rounded-xl bg-cyan-600 px-4 py-3 text-xs font-black uppercase tracking-wider text-white transition hover:bg-cyan-500"
-                  }
-                >
-                  {alertsEnabled
-                    ? "🔔 Alerts on · tap to turn off"
-                    : "🔔 Alert me when I'm up"}
-                </button>
-              )}
-
-              {myPlayerId && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setStatsPlayerId(myPlayerId)
-                  }
-                  className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-700 transition hover:bg-slate-100"
-                >
-                  📊 My Stats
-                </button>
-              )}
-
-            </section>
+            <PlayerStatusCard
+              myPlayerId={myPlayerId}
+              myCourtNumber={myCourtNumber}
+              myWaitingPosition={myWaitingPosition}
+              upNextCount={upNextCount}
+              isMyPlayerRegistered={isMyPlayerRegistered}
+              isMyPlayerOnCourt={isMyPlayerOnCourt}
+              isMyPlayerOnBreak={isMyPlayerOnBreak}
+              savingBreakId={savingBreakId}
+              alertsEnabled={alertsEnabled}
+              enableAlerts={enableAlerts}
+              disableAlerts={disableAlerts}
+              onToggleBreak={handleToggleBreak}
+              onShowStats={() => myPlayerId && setStatsPlayerId(myPlayerId)}
+            />
 
           </aside>
 
