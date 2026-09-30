@@ -4,7 +4,7 @@ import {
   type User,
 } from "firebase/auth";
 
-import { auth } from "./firebase";
+import { auth } from "./firebaseAuth";
 
 export function subscribeToAuth(
   callback: (user: User | null) => void

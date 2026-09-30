@@ -1,5 +1,4 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { connectAuthEmulator, getAuth } from "firebase/auth";
 import { connectDatabaseEmulator, getDatabase } from "firebase/database";
 
 const firebaseConfig = {
@@ -14,15 +13,13 @@ const firebaseConfig = {
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-export const auth = getAuth(app);
+// Sign-in lives in ./firebaseAuth so screens that never
+// sign anyone in (the TV display) don't download it.
 export const db = getDatabase(app);
 
 // `npm run dev:emulator` points the app at the local
 // Firebase emulators so testing never touches real data.
 if (import.meta.env.VITE_USE_EMULATOR === "true") {
-  connectAuthEmulator(auth, "http://127.0.0.1:9099", {
-    disableWarnings: true,
-  });
   connectDatabaseEmulator(db, "127.0.0.1", 9000);
 }
 export default app;

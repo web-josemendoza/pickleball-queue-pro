@@ -5,7 +5,7 @@ import {
   updateProfile,
 } from "firebase/auth";
 
-import { auth } from "./firebase";
+import { auth } from "./firebaseAuth";
 
 import {
   createPlayerProfile,

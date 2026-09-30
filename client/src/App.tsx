@@ -1,12 +1,7 @@
 import PlayerAuth from "./components/PlayerAuth";
-import PlayerStatsModal from "./components/PlayerStatsModal";
 import CompletedGames, {
   type CompletedGame,
 } from "./components/CompletedGames";
-import EditScoreModal from "./components/EditScoreModal";
-import SessionHistoryModal from "./components/SessionHistoryModal";
-import ManagePlayersModal from "./components/ManagePlayersModal";
-import CourtEditorModal from "./components/CourtEditorModal";
 import CourtCard from "./components/CourtCard";
 import LiveRanking from "./components/LiveRanking";
 import PlayerStatusCard from "./components/PlayerStatusCard";
@@ -27,6 +22,8 @@ import {
 } from "./lib/player";
 
 import {
+  lazy,
+  Suspense,
   useEffect,
   useMemo,
   useRef,
@@ -65,6 +62,13 @@ import {
   isSessionFinished,
   type OpenPlaySession,
 } from "./lib/session";
+
+// Windows that open rarely load on first use.
+const PlayerStatsModal = lazy(() => import("./components/PlayerStatsModal"));
+const EditScoreModal = lazy(() => import("./components/EditScoreModal"));
+const SessionHistoryModal = lazy(() => import("./components/SessionHistoryModal"));
+const ManagePlayersModal = lazy(() => import("./components/ManagePlayersModal"));
+const CourtEditorModal = lazy(() => import("./components/CourtEditorModal"));
 
 type ScoreInput = {
   a: string;
@@ -633,6 +637,7 @@ const orderedPlayerPool = useMemo(() => {
   playerProfile?.role === "admin";
 
   const statsModal = statsPlayerId && (
+    <Suspense fallback={null}>
     <PlayerStatsModal
       key={statsPlayerId}
       sessions={statsSessions}
@@ -642,9 +647,11 @@ const orderedPlayerPool = useMemo(() => {
       }
       onClose={() => setStatsPlayerId(null)}
     />
+    </Suspense>
   );
 
   const editScoreModal = isAdmin && editingResult && (
+    <Suspense fallback={null}>
     <EditScoreModal
       key={`${editingResult.courtNumber}-${editingResult.startedAt}`}
       game={editingResult}
@@ -658,6 +665,7 @@ const orderedPlayerPool = useMemo(() => {
       }
       onClose={() => setEditingResult(null)}
     />
+    </Suspense>
   );
 
   const recentResults = useMemo(() => {
@@ -1803,14 +1811,17 @@ const handleNewSessionClearPlayers = async () => {
       </main>
 
 {editingCourtNumber !== null && game && (
+  <Suspense fallback={null}>
   <CourtEditorModal
     game={game}
     courtNumber={editingCourtNumber}
     onClose={() => setEditingCourtNumber(null)}
   />
+  </Suspense>
 )}
 
 {showManagePlayers && game && (
+  <Suspense fallback={null}>
   <ManagePlayersModal
     game={game}
     onClose={() => setShowManagePlayers(false)}
@@ -1820,13 +1831,16 @@ const handleNewSessionClearPlayers = async () => {
     savingBreakId={savingBreakId}
     onToggleBreak={handleToggleBreak}
   />
+  </Suspense>
 )}
 
 {showSessionHistory && (
+  <Suspense fallback={null}>
   <SessionHistoryModal
     sessions={archivedSessions}
     onClose={() => setShowSessionHistory(false)}
   />
+  </Suspense>
 )}
 
     </div>

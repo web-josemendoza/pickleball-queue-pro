@@ -1,9 +1,12 @@
-import { StrictMode } from "react";
+import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App";
-import TvDisplay from "./components/TvDisplay";
 import ConnectionBanner from "./components/ConnectionBanner";
+
+// The player app loads directly (no extra round trip on
+// phones); the single venue TV loads its screen on demand.
+const TvDisplay = lazy(() => import("./components/TvDisplay"));
 
 // ?view=tv shows the read-only venue display.
 const isTvView =
@@ -14,6 +17,16 @@ const isTvView =
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ConnectionBanner readOnly={isTvView} />
-    {isTvView ? <TvDisplay /> : <App />}
+    <Suspense
+      fallback={
+        <div
+          className={`min-h-screen ${
+            isTvView ? "bg-slate-950" : "bg-slate-100"
+          }`}
+        />
+      }
+    >
+      {isTvView ? <TvDisplay /> : <App />}
+    </Suspense>
   </StrictMode>
 );
