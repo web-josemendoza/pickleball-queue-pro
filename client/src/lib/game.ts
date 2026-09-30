@@ -525,7 +525,8 @@ export async function startOpenPlay(
     createPairedInitialCycle(
       players,
       courtCount,
-      sessionPairs
+      sessionPairs,
+      sessionKeepApart
     );
 
   const rules = buildMixRules(

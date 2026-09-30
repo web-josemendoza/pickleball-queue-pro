@@ -9,7 +9,7 @@ import {
   LONG_GAME_MINUTES,
 } from "./lib/courtTiming";
 
-import { subscribeToAuth } from "./lib/auth";
+import { logout, subscribeToAuth } from "./lib/auth";
 
 import {
   getPlayerProfile,
@@ -2028,6 +2028,44 @@ const handleAddGuestPlayer =
     }
   };
 
+  const handleAuthenticated = async (
+    userId: string
+  ) => {
+    const profile =
+      await getPlayerProfile(userId);
+
+    setMyPlayerId(userId);
+    setPlayerProfile(profile);
+
+    localStorage.setItem(
+      "pickleballPlayerId",
+      userId
+    );
+
+    if (profile) {
+      localStorage.setItem(
+        "pickleballPlayerName",
+        profile.name
+      );
+    }
+
+    setShowAuth(false);
+  };
+
+  const handleSignOut = async () => {
+    if (!window.confirm("Sign out of this device?")) {
+      return;
+    }
+
+    try {
+      // The auth listener clears the player state.
+      await logout();
+    } catch (error) {
+      console.error("Unable to sign out:", error);
+      alert("Unable to sign out. Please try again.");
+    }
+  };
+
   const getFixedPartner = (
     playerId: string
   ) => {
@@ -2167,28 +2205,8 @@ const handleAddGuestPlayer =
     ) : (
       <div className="mt-4">
         <PlayerAuth
-  onAuthenticated={async (userId) => {
-    const profile =
-      await getPlayerProfile(userId);
-
-    setMyPlayerId(userId);
-    setPlayerProfile(profile);
-
-    localStorage.setItem(
-      "pickleballPlayerId",
-      userId
-    );
-
-    if (profile) {
-      localStorage.setItem(
-        "pickleballPlayerName",
-        profile.name
-      );
-    }
-
-    setShowAuth(false);
-  }}
-/>
+          onAuthenticated={handleAuthenticated}
+        />
 
         <button
           type="button"
@@ -2249,6 +2267,14 @@ const handleAddGuestPlayer =
         📊 My Stats
       </button>
     )}
+
+    <button
+      type="button"
+      onClick={() => void handleSignOut()}
+      className="mt-2 w-full rounded-xl px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100"
+    >
+      Sign out
+    </button>
   </div>
 )}
 <button
@@ -2860,6 +2886,24 @@ const handleAddGuestPlayer =
 
       {statsModal}
 
+      {showAuth && !playerProfile && (
+        <div className="fixed inset-0 z-[125] flex items-center justify-center bg-slate-950/80 p-4">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-4">
+            <PlayerAuth
+              onAuthenticated={handleAuthenticated}
+            />
+
+            <button
+              type="button"
+              onClick={() => setShowAuth(false)}
+              className="mt-3 w-full rounded-xl border border-slate-300 px-4 py-3 font-bold text-slate-700"
+            >
+              CANCEL
+            </button>
+          </div>
+        </div>
+      )}
+
       {activeAlert && (
         <div className="fixed inset-x-0 top-0 z-[130] flex justify-center p-4">
           <div
@@ -2915,6 +2959,30 @@ const handleAddGuestPlayer =
             </div>
 
             <div className="flex flex-wrap gap-2">
+
+              {/* ACCOUNT */}
+              {playerProfile ? (
+                <button
+                  type="button"
+                  onClick={() => void handleSignOut()}
+                  className="rounded-xl bg-slate-900 px-4 py-3 text-left hover:bg-slate-800"
+                >
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Signed in
+                  </p>
+                  <p className="max-w-[160px] truncate font-black">
+                    {playerProfile.name}
+                  </p>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowAuth(true)}
+                  className="rounded-xl bg-cyan-500 px-4 py-3 font-black text-slate-950 hover:bg-cyan-400"
+                >
+                  SIGN IN
+                </button>
+              )}
 
               {/* TIME LEFT */}
               <div className="rounded-xl bg-slate-900 px-4 py-3">

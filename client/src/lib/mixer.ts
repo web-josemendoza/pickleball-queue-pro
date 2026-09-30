@@ -23,8 +23,12 @@ import type { QueuePlayer } from "./queue";
 export function createPairedInitialCycle(
   players: QueuePlayer[],
   courtCount: number,
-  fixedPairs: FixedPair[]
+  fixedPairs: FixedPair[],
+  keepApartPairs: FixedPair[] = []
 ) {
+  // Without fixed pairs every group of four has a
+  // split that avoids a single keep-apart pair, so
+  // chooseBestTeamPairing handles it later.
   if (fixedPairs.length === 0) {
     return createInitialCycle(
       players,
@@ -33,8 +37,13 @@ export function createPairedInitialCycle(
     );
   }
 
-  const fixedPartners =
-    buildFixedPartnerMap(fixedPairs);
+  const rules = buildMixRules(
+    fixedPairs,
+    keepApartPairs,
+    false
+  );
+
+  const { fixedPartners } = rules;
 
   const playerById = new Map(
     players.map((player) => [
@@ -85,6 +94,30 @@ export function createPairedInitialCycle(
     let spots = 4;
 
     for (const unit of remaining) {
+      // The unit that completes a court must leave a
+      // team split with no kept-apart teammates (e.g.
+      // a pair plus two kept-apart singles cannot
+      // work). Such a unit waits for the next court.
+      const completesCourt =
+        unit.length === spots;
+
+      if (
+        completesCourt &&
+        rules.keepApart.size > 0 &&
+        getKeepApartPenalty(
+          chooseBestTeamPairing(
+            [...pairs.flat(), ...singles, ...unit],
+            new Map(),
+            new Map(),
+            rules
+          ),
+          rules
+        ) > 0
+      ) {
+        leftOver.push(unit);
+        continue;
+      }
+
       if (unit.length <= spots) {
         spots -= unit.length;
 

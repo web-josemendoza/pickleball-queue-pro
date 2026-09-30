@@ -6,6 +6,8 @@ import type {
   OpenPlayState,
 } from "./game";
 import {
+  buildMixRules,
+  chooseBestTeamPairing,
   createPairedInitialCycle,
   planNextCourt,
 } from "./mixer";
@@ -376,6 +378,51 @@ describe("keep-apart pairs", () => {
           )
         ).toBe(false);
       }
+    }
+  });
+});
+
+describe("first round with pairs and keep-apart", () => {
+  it("does not force kept-apart players to be teammates", () => {
+    // Found in the practice run: Ben & Cara (fixed)
+    // and Dan & Eve (kept apart) were the first four
+    // in the queue, so Dan & Eve had to team up.
+    const fixedPairs = [
+      { playerA: "p0", playerB: "p1" },
+    ];
+    const keepApartPairs = [
+      { playerA: "p2", playerB: "p3" },
+    ];
+
+    const cycle = createPairedInitialCycle(
+      makePlayers(10),
+      2,
+      fixedPairs,
+      keepApartPairs
+    );
+
+    const rules = buildMixRules(
+      fixedPairs,
+      keepApartPairs,
+      false
+    );
+
+    expect(cycle.courts).toHaveLength(2);
+
+    for (const court of cycle.courts) {
+      expect(court.players).toHaveLength(4);
+
+      const lineup = chooseBestTeamPairing(
+        court.players,
+        new Map(),
+        new Map(),
+        rules
+      );
+
+      expect(areTeammates(lineup, "p2", "p3")).toBe(false);
+      expect(areTeammates(lineup, "p0", "p1")).toBe(
+        lineup.some((player) => player.id === "p0")
+      );
     }
   });
 });
