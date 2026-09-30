@@ -291,6 +291,20 @@ function buildMixRulesFromState(
  */
 const KEEP_APART_PENALTY = 100000;
 
+/*
+ * Losers stay on: when some players from the court
+ * that just finished must play again, the winners
+ * rest first. This outranks partner variety (repeat
+ * partners cost 1000 each and add up over a session,
+ * and fixed pairs pay nothing) but stays below one
+ * game behind, so fair turns still come first.
+ */
+const WINNER_REPLAY_PENALTY = 5000;
+
+// Per game a player in the group is ahead of the
+// least-played available player.
+const GAME_BEHIND_PENALTY = 10000;
+
 function getKeepApartPenalty(
   lineup: QueuePlayer[],
   rules: MixRules
@@ -708,7 +722,8 @@ function chooseFairCourtPlayers(
   queuePosition: Map<string, number>,
   partnerHistory: PairHistory,
   opponentHistory: PairHistory,
-  rules: MixRules
+  rules: MixRules,
+  justWonIds: Set<string> = new Set()
 ): QueuePlayer[] {
   if (availablePlayers.length < 4) {
     return [];
@@ -922,7 +937,11 @@ function chooseFairCourtPlayers(
   for (const combination of combinations) {
     /*
      * Players with fewer games get
-     * overwhelmingly higher priority.
+     * overwhelmingly higher priority:
+     * one game behind outweighs repeat
+     * partners, winners replaying and skill
+     * balance combined. Only keep-apart is
+     * stronger.
      */
 
     const gameFairnessPenalty =
@@ -938,7 +957,7 @@ function chooseFairCourtPlayers(
 
       return (
         total +
-        gamesBehind * 2500
+        gamesBehind * GAME_BEHIND_PENALTY
       );
     },
     0
@@ -1020,7 +1039,10 @@ function chooseFairCourtPlayers(
       getKeepApartPenalty(
         pairedPlayers,
         rules
-      );
+      ) +
+      pairedPlayers.filter((player) =>
+        justWonIds.has(player.id)
+      ).length * WINNER_REPLAY_PENALTY;
 
     if (totalScore < bestScore) {
       bestScore = totalScore;
@@ -1066,13 +1088,28 @@ export function planNextCourt(
   );
 
   // Waiting players first (in queue order), then
-  // the players coming off this court.
+  // the players coming off this court, losers
+  // ahead of winners. When some of them must play
+  // again, the losing team gets those spots.
+  const loserIds = new Set(
+    completedCourt.loserIds ?? []
+  );
+
+  const offCourt = [
+    ...completedCourt.players.filter((player) =>
+      loserIds.has(player.id)
+    ),
+    ...completedCourt.players.filter(
+      (player) => !loserIds.has(player.id)
+    ),
+  ];
+
   const rotationMap =
     new Map<string, QueuePlayer>();
 
   for (const player of [
     ...(state.waitingPlayers ?? []),
-    ...completedCourt.players,
+    ...offCourt,
   ]) {
     if (
       !otherPlayingIds.has(player.id) &&
@@ -1118,7 +1155,8 @@ export function planNextCourt(
     queuePosition,
     partnerHistory,
     opponentHistory,
-    buildMixRulesFromState(state)
+    buildMixRulesFromState(state),
+    new Set(completedCourt.winnerIds ?? [])
   );
 
   if (players.length !== 4) {

@@ -135,6 +135,14 @@ function simulate(options: SimOptions) {
       completedAt: clock,
       scoreA: teamAWins ? 11 : 7,
       scoreB: teamAWins ? 7 : 11,
+      winnerIds: (teamAWins
+        ? court.players.slice(0, 2)
+        : court.players.slice(2, 4)
+      ).map((player) => player.id),
+      loserIds: (teamAWins
+        ? court.players.slice(2, 4)
+        : court.players.slice(0, 2)
+      ).map((player) => player.id),
     };
 
     state.courts[courtIndex] = completed;
@@ -233,6 +241,93 @@ describe("rotation fairness", () => {
     expect(new Set(onCourt).size).toBe(
       onCourt.length
     );
+  });
+
+  /*
+   * For each finished game: a winner may go straight
+   * back on while a loser from that court sits out
+   * only if the loser has played more games (fair
+   * turns come first).
+   */
+  function expectLosersStayOn(
+    state: OpenPlayState,
+    lineups: QueuePlayer[][]
+  ) {
+    const games = new Map<string, number>();
+    let checked = 0;
+
+    state.cycles.forEach((cycle, index) => {
+      const finished = cycle.courts[0];
+
+      for (const player of finished.players) {
+        games.set(
+          player.id,
+          (games.get(player.id) ?? 0) + 1
+        );
+      }
+
+      const next = new Set(
+        lineups[index + finished.courtNumber].map(
+          (player) => player.id
+        )
+      );
+
+      for (const winner of finished.winnerIds) {
+        for (const loser of finished.loserIds) {
+          if (next.has(winner) && !next.has(loser)) {
+            expect(games.get(loser)).toBeGreaterThan(
+              games.get(winner) ?? 0
+            );
+            checked += 1;
+          }
+        }
+      }
+    });
+
+    return checked;
+  }
+
+  it("gives the losing team the spots when some must play again", () => {
+    // 6 players, 1 court: every game, 2 of the 4
+    // players coming off must go straight back on.
+    const { state, lineups } = simulate({
+      players: makePlayers(6),
+      courtCount: 1,
+      games: 30,
+    });
+
+    expectLosersStayOn(state, lineups);
+
+    // And losers really do replay: most games
+    // send both losers straight back on.
+    const bothLosersBack = state.cycles.filter(
+      (cycle, index) => {
+        const next = lineups[index + 1].map(
+          (player) => player.id
+        );
+
+        return cycle.courts[0].loserIds.every((id) =>
+          next.includes(id)
+        );
+      }
+    ).length;
+
+    expect(bothLosersBack).toBeGreaterThanOrEqual(
+      state.cycles.length / 2
+    );
+  });
+
+  it("applies losers-stay-on to fixed pairs too", () => {
+    const { state, lineups } = simulate({
+      players: makePlayers(6),
+      courtCount: 1,
+      games: 30,
+      fixedPairs: [
+        { playerA: "p0", playerB: "p1" },
+      ],
+    });
+
+    expectLosersStayOn(state, lineups);
   });
 
   it("does not repeat a partner in back-to-back games", () => {
