@@ -23,7 +23,7 @@
       ".write": "auth != null && root.child('players').child(auth.uid).child('role').val() === 'admin'",
 
       "game": {
-        ".write": "auth != null"
+        ".write": "auth != null && (newData.exists() || root.child('players').child(auth.uid).child('role').val() === 'admin')"
       }
     }
   }

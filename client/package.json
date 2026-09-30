@@ -8,7 +8,10 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run src",
+    "test:rules": "firebase emulators:exec --only database \"vitest run tests/rules\"",
+    "emulators": "firebase emulators:start --only auth,database",
+    "dev:emulator": "vite --mode emulator"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -28,6 +31,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.17",
@@ -36,7 +40,9 @@
     "eslint": "^10.8.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",
+    "firebase-tools": "^15.32.0",
     "globals": "^17.7.0",
+    "playwright-core": "^1.63.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.65.0",

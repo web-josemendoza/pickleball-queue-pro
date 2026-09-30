@@ -296,6 +296,11 @@ const [playerProfile, setPlayerProfile] =
   const [myPlayerId, setMyPlayerId] = useState<string | null>(
     localStorage.getItem("pickleballPlayerId")
   );
+
+  // myPlayerId starts from localStorage, so wait
+  // for Firebase Auth to confirm the sign-in.
+  const isSignedIn =
+    authReady && myPlayerId !== null;
   const [loading, setLoading] = useState(false);
 
 const [setupCourtCount, setSetupCourtCount] =
@@ -569,6 +574,11 @@ useEffect(() => {
       return;
     }
 
+    // Only signed-in devices may write the session.
+    if (!isSignedIn) {
+      return;
+    }
+
     const sessionForClock: OpenPlaySession = {
       playerCount: game.playerCount,
       courtCount: game.courtCount,
@@ -587,7 +597,7 @@ useEffect(() => {
         endingSessionRef.current = false;
       });
     }
-  }, [game, now]);
+  }, [game, now, isSignedIn]);
 
   // --------------------------------------------------
   // RESET SCORE INPUTS WHEN A NEW CYCLE STARTS
@@ -616,6 +626,13 @@ useEffect(() => {
 // --------------------------------------------------
 
 useEffect(() => {
+  // The database only accepts session writes
+  // from signed-in users, so spectators leave
+  // this to a signed-in device.
+  if (!isSignedIn) {
+    return;
+  }
+
   if (!game || game.status !== "active") {
     return;
   }
@@ -674,7 +691,7 @@ useEffect(() => {
         advancingCycleRef.current = false;
       }, 250);
     });
-}, [game]);
+}, [game, isSignedIn]);
   // --------------------------------------------------
   // DERIVED VALUES
   // --------------------------------------------------
