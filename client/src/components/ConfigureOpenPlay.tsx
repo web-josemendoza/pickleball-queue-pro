@@ -1,5 +1,6 @@
 import { useEffect, useState, type ChangeEvent } from "react";
 
+import AddRegisteredPlayers from "./AddRegisteredPlayers";
 import PairRulesEditor from "./PairRulesEditor";
 import { createInitialCycle } from "../lib/fourOnFour";
 import {
@@ -173,6 +174,10 @@ export default function ConfigureOpenPlay({
           />
           <span className="text-xs text-slate-500">Minimum: 1</span>
         </label>
+      </div>
+
+      <div className="mt-5">
+        <AddRegisteredPlayers queuePlayers={players} />
       </div>
 
       <div className="mt-5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-4 text-sm text-cyan-100">

@@ -79,6 +79,38 @@ export function joinQueue(
 }
 
 // ==================================================
+// ADMIN - ADD PLAYERS TO QUEUE
+// ==================================================
+
+/*
+ * Adds several registered players at once, in the order
+ * given, behind everyone already waiting. Pass only
+ * players not yet in the queue: re-adding someone moves
+ * them to the back.
+ */
+export function addPlayersToQueue(
+  players: {
+    playerId: string;
+    name: string;
+    skillLevel: SkillLevel;
+  }[]
+) {
+  const updates: Record<string, unknown> = {};
+  const now = Date.now();
+
+  players.forEach((player, index) => {
+    updates[`queue/${player.playerId}`] = {
+      name: player.name,
+      skillLevel: player.skillLevel,
+      // Client time plus index keeps the chosen order.
+      joinedAt: now + index,
+    };
+  });
+
+  return update(ref(db), updates);
+}
+
+// ==================================================
 // LEAVE QUEUE
 // ==================================================
 

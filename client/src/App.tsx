@@ -1184,10 +1184,40 @@ const handleNewSessionClearPlayers = async () => {
             WAITING #{waitingPosition}
           </span>
         )
+      ) : isAdmin && game?.status !== "active" ? (
+        <button
+          type="button"
+          onClick={() => void handleRemoveFromQueue(player)}
+          aria-label={`Remove ${player.name} from the queue`}
+          className="ml-3 shrink-0 rounded-lg px-2 py-1 text-xs font-black text-slate-400 hover:bg-red-500/20 hover:text-red-300"
+        >
+          REMOVE
+        </button>
       ) : null}
     </div>
   );
 };
+
+  // Admin, before play starts: take someone out of the
+  // queue (e.g. added by mistake or went home).
+  const handleRemoveFromQueue = async (
+    player: QueuePlayer
+  ) => {
+    if (
+      !window.confirm(
+        `Remove ${player.name} from the queue?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await leaveQueue(player.id);
+    } catch (error) {
+      console.error("Unable to remove player from queue:", error);
+      alert("Unable to remove player. Please try again.");
+    }
+  };
 
   const handleDraftScoreChange = (
     court: CourtState,
